@@ -16,6 +16,7 @@ void drawProperties(App& app);
 void drawSettings(App& app);
 void drawUpdateStatus(App& app, bool compact);
 void drawUpdatePopup(App& app);
+void compositionSettingsBody(App& app, bool popup);
 bool shortcutCaptureActive();
 // título traduzido com ID fixo (o layout não se perde ao mudar de idioma)
 std::string winTitle(const char* pt, const char* id);

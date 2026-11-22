@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <shellapi.h>
 #include <algorithm>
+#include <vector>
 
 namespace ps {
 
@@ -44,10 +45,17 @@ void sectionGeneral(App& app) {
     if (ImGui::RadioButton(T("Mostrar preto (recomendado em espetáculo)"), s.outputsOffBlack)) { s.outputsOffBlack = true; save(); }
     if (ImGui::RadioButton(T("Fechar a janela (vê-se o ambiente de trabalho)"), !s.outputsOffBlack)) { s.outputsOffBlack = false; save(); }
     if (ImGui::Checkbox(T("Ligar as saídas automaticamente ao abrir um projeto"), &s.startOutputsLive)) save();
+
+    ImGui::SeparatorText(T("Janelas"));
+    if (ImGui::Button(T("Repor disposição das janelas"))) app.ui.layoutBuilt = false;
 }
 
-void sectionGpu() {
+void sectionGpu(App& app) {
     Settings& s = settings();
+    ImGui::SeparatorText(T("Composição"));
+    ImGui::PushItemWidth(260);
+    compositionSettingsBody(app, false);
+    ImGui::PopItemWidth();
     ImGui::SeparatorText(T("Placa gráfica"));
     ImGui::TextWrapped("%s", T("Placa usada para descodificar e desenhar os vídeos. As saídas ligadas a outra placa também funcionam, mas com mais carga."));
     ImGui::Spacing();
@@ -86,6 +94,87 @@ void sectionAudio() {
     for (auto& a : g_audio) {
         std::string lbl = a.name + (a.isDefault ? std::string("  (") + T("predefinida") + ")" : "") + "##" + a.id;
         if (ImGui::RadioButton(lbl.c_str(), s.audioDevice == a.id)) { s.audioDevice = a.id; s.audioName = a.name; save(); }
+    }
+}
+
+void sectionPerformance(App& app) {
+    Settings& s = settings();
+    ImGui::SeparatorText(T("Performance"));
+    ImGui::TextWrapped("%s", T("Opções para tirar o máximo do PC durante um espetáculo."));
+    ImGui::Spacing();
+    const char* prios[] = {T("Normal"), T("Acima do normal"), T("Alta (recomendado)")};
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::Combo(T("Prioridade do processo"), &s.priority, prios, 3)) { app.applyPerformance(); save(); }
+    if (ImGui::Checkbox(T("Impedir que o Windows suspenda ou desligue os ecrãs"), &s.preventSleep)) { app.applyPerformance(); save(); }
+    if (ImGui::Checkbox(T("Descodificar H.264 / H.265 na placa gráfica"), &s.hwDecode)) save();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Desligar só se houver problemas com algum ficheiro. Aplica-se aos clips que forem disparados a seguir."));
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::SliderInt(T("Frames em memória por clip"), &s.decodeBuffer, 3, 16)) save();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Mais frames = mais tolerância a discos lentos, mas mais memória."));
+    if (ImGui::Checkbox(T("Interface a 30 fps com saídas no ar (mais placa gráfica para as saídas)"), &s.limitUiWhenLive)) save();
+    ImGui::Spacing();
+    ImGui::SeparatorText(T("Recomendações"));
+    ImGui::BulletText("%s", T("Usa HAP ou HAP Q para vídeos grandes ou muitas layers ao mesmo tempo."));
+    ImGui::BulletText("%s", T("Coloca os vídeos num disco SSD/NVMe interno."));
+    ImGui::BulletText("%s", T("No Windows: plano de energia \"Desempenho máximo\" e notificações desligadas."));
+    ImGui::BulletText("%s", T("No painel da NVIDIA: \"Modo de gestão de energia\" = \"Preferir desempenho máximo\"."));
+    ImGui::BulletText("%s", T("Liga os monitores/processadores LED à mesma placa gráfica escolhida em Vídeo."));
+}
+
+void sectionHowTo() {
+    ImGui::SeparatorText(T("Como usar"));
+    struct Step { const char* title; const char* text; };
+    const Step steps[] = {
+        {"1. Composição", "Define em Vídeo a resolução da composição: uma tela grande onde cabem todos os conteúdos (ex.: 7680x2160)."},
+        {"2. Ecrãs", "Em \"Saídas e Slices\" cria um ecrã por cada saída da placa gráfica (ou processador LED) e escolhe a saída na lista."},
+        {"3. Slices", "Cria uma slice por ledwall. No separador Entrada escolhes a zona da composição; no separador Saída escolhes onde aparece no ecrã. Arrasta, redimensiona pelos cantos e roda pelo círculo turquesa."},
+        {"4. Layers dedicadas", "Usa \"Criar layer dedicada a esta slice\": os vídeos dessa layer encaixam automaticamente no ledwall certo."},
+        {"5. Vídeos", "Arrasta os vídeos do Explorador para as células da grelha (ou duplo clique numa célula vazia)."},
+        {"6. Preview e Programa", "Clica na metade de baixo de um clip para o ver em Preview; na metade de cima vai para o Programa (no ar). Enter envia o preview para o ar. O cabeçalho de uma coluna põe a coluna inteira no ar."},
+        {"7. Ligar as saídas", "Marca os ecrãs \"No atalho\" e carrega em F12 para ligar/desligar as saídas. Ctrl+F12 liga todas, Shift+F12 desliga todas."},
+        {"8. Gravar", "Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash."},
+    };
+    for (auto& st : steps) {
+        ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s", T(st.title));
+        ImGui::Indent();
+        ImGui::TextWrapped("%s", T(st.text));
+        ImGui::Unindent();
+        ImGui::Spacing();
+    }
+    ImGui::SeparatorText(T("Dicas"));
+    ImGui::BulletText("%s", T("Ver em Preview/Programa: escolhe Composição, um Ecrã (como sai na saída) ou só uma Slice."));
+    ImGui::BulletText("%s", T("No editor de slices, o fundo pode mostrar o Programa ou o Preview para alinhares as slices com o vídeo."));
+    ImGui::BulletText("%s", T("Setas movem a slice 1 px (Shift = 10 px); Ctrl+D duplica; Del apaga."));
+}
+
+void sectionWhatsNew() {
+    ImGui::SeparatorText(T("Novidades"));
+    struct Rel { const char* ver; std::vector<const char*> items; };
+    const Rel rels[] = {
+        {"0.2.0", {
+            "Preview e Programa: metade de baixo do clip = preview, metade de cima = programa; Enter envia o preview para o ar.",
+            "Monitores com \"Ver\": composição, um ecrã completo ou só uma slice.",
+            "Editor de slices com o vídeo do programa ou do preview no fundo.",
+            "Novo menu e Definições: Geral, Vídeo, Áudio, Rede, Performance, Atalhos, Atualizações, Como usar, Novidades e Sobre.",
+            "Interface em Português e English.",
+            "Ligar/desligar saídas com F12 (ecrãs marcados \"No atalho\").",
+            "Atalhos de teclado configuráveis.",
+            "Atualizações automáticas a partir do GitHub.",
+            "Instalador com escolha de idioma.",
+            "Miniaturas dos clips mais úteis (já não ficam pretas).",
+        }},
+        {"0.1.0", {
+            "Primeira versão: motor Direct3D 11 com HAP, H.264/H.265 pela placa gráfica e ProRes.",
+            "Grelha de clips com layers e colunas, regiões por layer e crossfade.",
+            "Editor de ecrãs e slices arrastável com snap, rotação e test pattern.",
+            "Saídas por monitor, gravação automática e recuperação depois de um crash.",
+        }},
+    };
+    for (auto& r : rels) {
+        bool cur = std::string(r.ver) == PLAYERSLICE_VERSION;
+        ImGui::TextColored(cur ? ImVec4(0.25f, 0.88f, 0.75f, 1) : ImVec4(0.75f, 0.75f, 0.78f, 1), "%s %s%s", T("Versão"), r.ver, cur ? T("  (instalada)") : "");
+        for (auto* it : r.items) ImGui::BulletText("%s", T(it));
+        ImGui::Spacing();
     }
 }
 
@@ -224,7 +313,7 @@ void drawUpdatePopup(App& app) {
 void drawSettings(App& app) {
     if (g_startGpu.empty()) g_startGpu = toUtf8(gfx().adapterName());
     if (app.ui.showSettings) {
-        ImGui::SetNextWindowSize(ImVec2(820, 560), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_Appearing);
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     } else {
         g_listed = false;
@@ -235,9 +324,9 @@ void drawSettings(App& app) {
     if (!ImGui::Begin(title.c_str(), &app.ui.showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
     if (!g_listed) refreshLists();
 
-    const char* tabs[] = {"Geral", "Placa gráfica", "Placa de rede", "Placa de som", "Atalhos", "Atualizações", "Sobre"};
+    const char* tabs[] = {"Geral", "Vídeo", "Áudio", "Rede", "Performance", "Atalhos", "Atualizações", "Como usar", "Novidades", "Sobre"};
     ImGui::BeginChild("nav", ImVec2(180, 0), ImGuiChildFlags_Borders);
-    for (int i = 0; i < 7; ++i) {
+    for (int i = 0; i < 10; ++i) {
         std::string l = std::string(T(tabs[i])) + "##tab" + std::to_string(i);
         if (ImGui::Selectable(l.c_str(), app.ui.settingsTab == i, 0, ImVec2(0, 26))) app.ui.settingsTab = i;
     }
@@ -248,11 +337,14 @@ void drawSettings(App& app) {
     ImGui::BeginChild("content", ImVec2(0, 0), ImGuiChildFlags_Borders);
     switch (app.ui.settingsTab) {
     case 0: sectionGeneral(app); break;
-    case 1: sectionGpu(); break;
-    case 2: sectionNetwork(); break;
-    case 3: sectionAudio(); break;
-    case 4: sectionShortcuts(); break;
-    case 5: sectionUpdates(app); break;
+    case 1: sectionGpu(app); break;
+    case 2: sectionAudio(); break;
+    case 3: sectionNetwork(); break;
+    case 4: sectionPerformance(app); break;
+    case 5: sectionShortcuts(); break;
+    case 6: sectionUpdates(app); break;
+    case 7: sectionHowTo(); break;
+    case 8: sectionWhatsNew(); break;
     default: sectionAbout(); break;
     }
     ImGui::EndChild();

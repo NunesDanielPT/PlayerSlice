@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(PLAYERSLICE VERSION 0.1.0 LANGUAGES C CXX)
+project(PLAYERSLICE VERSION 0.2.0 LANGUAGES C CXX)
 
 # PLAYERSLICE — player de vídeo para ecrãs fora de formato (slices)
 # Criado por Daniel Nunes — github.com/NunesDanielPT

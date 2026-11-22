@@ -297,31 +297,44 @@ static void propertiesWindow(App& app) {
     ImGui::End();
 }
 
+// editor da resolução da composição (usado no popup e nas Definições → Vídeo)
+void compositionSettingsBody(App& app, bool popup) {
+    Composition& c = app.project.comp;
+    static int wh[2] = {0, 0};
+    static bool init = false;
+    if (!init || (popup && ImGui::IsWindowAppearing())) { wh[0] = c.width; wh[1] = c.height; init = true; }
+    ImGui::InputInt2(T("Resolução"), wh);
+    const struct { const char* n; int w, h; } presets[] = {
+        {"1920x1080", 1920, 1080}, {"2560x1440", 2560, 1440}, {"3840x2160 (4K)", 3840, 2160},
+        {"5760x1080 (3x HD)", 5760, 1080}, {"7680x1080 (4x HD)", 7680, 1080}, {"7680x2160 (2x 4K)", 7680, 2160},
+        {"7680x4320 (8K)", 7680, 4320}};
+    for (int i = 0; i < 7; ++i) {
+        if (i) ImGui::SameLine();
+        if (ImGui::GetContentRegionAvail().x < ImGui::CalcTextSize(presets[i].n).x + 20) ImGui::NewLine();
+        if (ImGui::SmallButton(presets[i].n)) { wh[0] = presets[i].w; wh[1] = presets[i].h; }
+    }
+    ImGui::DragFloat(T("FPS de referência"), &c.fps, 0.1f, 1, 240, "%.2f");
+    ImGui::TextDisabled(T("Máximo da GPU: 16384x16384. VRAM: %zu MB"), gfx().vramMB());
+    bool changed = wh[0] != c.width || wh[1] != c.height;
+    ImGui::BeginDisabled(!changed);
+    if (ImGui::Button(T("Aplicar"), ImVec2(120, 0))) {
+        app.checkpoint();
+        c.width = std::clamp(wh[0], 16, 16384);
+        c.height = std::clamp(wh[1], 16, 16384);
+        wh[0] = c.width; wh[1] = c.height;
+        if (popup) ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndDisabled();
+    if (!popup && !changed && (wh[0] != c.width || wh[1] != c.height)) { wh[0] = c.width; wh[1] = c.height; }
+}
+
 static void compSettingsPopup(App& app) {
     std::string title = winTitle("Definições da composição", "compsettings");
     if (app.ui.showCompSettings) { ImGui::OpenPopup(title.c_str()); app.ui.showCompSettings = false; }
     if (ImGui::BeginPopupModal(title.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        Composition& c = app.project.comp;
-        static int wh[2];
-        if (ImGui::IsWindowAppearing()) { wh[0] = c.width; wh[1] = c.height; }
-        ImGui::InputInt2(T("Resolução"), wh);
-        const struct { const char* n; int w, h; } presets[] = {
-            {"1920x1080", 1920, 1080}, {"2560x1440", 2560, 1440}, {"3840x2160 (4K)", 3840, 2160},
-            {"5760x1080 (3x HD)", 5760, 1080}, {"7680x1080 (4x HD)", 7680, 1080}, {"7680x2160 (2x 4K)", 7680, 2160},
-            {"7680x4320 (8K)", 7680, 4320}};
-        for (auto& pr : presets) {
-            if (ImGui::SmallButton(pr.n)) { wh[0] = pr.w; wh[1] = pr.h; }
-            ImGui::SameLine();
-        }
-        ImGui::NewLine();
-        ImGui::DragFloat(T("FPS de referência"), &c.fps, 0.1f, 1, 240, "%.2f");
-        ImGui::TextDisabled(T("Máximo da GPU: 16384x16384. VRAM: %zu MB"), gfx().vramMB());
-        if (ImGui::Button(T("Aplicar"), ImVec2(120, 0))) {
-            app.checkpoint();
-            c.width = std::clamp(wh[0], 16, 16384);
-            c.height = std::clamp(wh[1], 16, 16384);
-            ImGui::CloseCurrentPopup();
-        }
+        ImGui::PushItemWidth(260);
+        compositionSettingsBody(app, true);
+        ImGui::PopItemWidth();
         ImGui::SameLine();
         if (ImGui::Button(T("Cancelar"), ImVec2(120, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
@@ -387,6 +400,7 @@ static std::string menuKey(Action a) { return bindingLabel(settings().keys[(int)
 void drawUI(App& app) {
     shortcuts(app);
 
+    auto openSettings = [&](int tab) { app.ui.showSettings = true; app.ui.settingsTab = tab; };
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu(T("Ficheiro"))) {
             if (ImGui::MenuItem(T("Novo projeto"))) {
@@ -397,22 +411,17 @@ void drawUI(App& app) {
             if (ImGui::MenuItem(T("Gravar"), menuKey(Action::Save).c_str())) app.saveOrSaveAs();
             if (ImGui::MenuItem(T("Gravar como..."), menuKey(Action::SaveAs).c_str())) app.saveAsDialog();
             ImGui::Separator();
-            if (ImGui::MenuItem(T("Definições..."), menuKey(Action::Settings).c_str())) app.ui.showSettings = true;
-            ImGui::Separator();
             if (ImGui::MenuItem(T("Sair"))) PostMessageW(app.hwnd(), WM_CLOSE, 0, 0);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(T("Editar"))) {
             if (ImGui::MenuItem(T("Desfazer"), menuKey(Action::Undo).c_str(), false, app.canUndo())) app.undo();
             if (ImGui::MenuItem(T("Refazer"), menuKey(Action::Redo).c_str(), false, app.canRedo())) app.redo();
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu(T("Composição"))) {
-            if (ImGui::MenuItem(T("Definições da composição..."))) app.ui.showCompSettings = true;
+            ImGui::Separator();
             if (ImGui::MenuItem(T("Adicionar layer"))) { app.checkpoint(); app.project.addLayer("Layer " + std::to_string(app.project.comp.layers.size() + 1)); }
             if (ImGui::MenuItem(T("Adicionar coluna"))) { app.checkpoint(); app.project.ensureColumns((int)app.project.comp.columns.size() + 1); }
             ImGui::Separator();
-            if (ImGui::MenuItem(T("Parar tudo"), menuKey(Action::StopAll).c_str())) app.comp.stopAll(app.project);
+            if (ImGui::MenuItem(T("Parar todos os clips"), menuKey(Action::StopAll).c_str())) app.comp.stopAll(app.project);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(T("Saídas"))) {
@@ -421,21 +430,24 @@ void drawUI(App& app) {
             if (ImGui::MenuItem(T("Desligar todas as saídas"), menuKey(Action::OutputsOff).c_str())) app.setAllOutputs(false);
             ImGui::Separator();
             if (ImGui::MenuItem(T("Editor de saídas e slices"), menuKey(Action::OutputEditor).c_str())) app.ui.focusEditor = true;
+            if (ImGui::MenuItem(T("Resolução da composição..."))) app.ui.showCompSettings = true;
             if (ImGui::MenuItem(T("Detetar monitores de novo"))) app.refreshDisplays();
             ImGui::Separator();
             ImGui::TextDisabled("%s", T("Saídas detetadas:"));
             for (auto& d : app.displays) ImGui::TextDisabled("  %s", d.label().c_str());
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu(T("Ver"))) {
-            if (ImGui::MenuItem(T("Repor disposição das janelas"))) app.ui.layoutBuilt = false;
-            ImGui::EndMenu();
-        }
         if (ImGui::BeginMenu(T("Ajuda"))) {
-            if (ImGui::MenuItem(T("Atalhos de teclado"))) { app.ui.showSettings = true; app.ui.settingsTab = 4; }
-            if (ImGui::MenuItem(T("Sobre o PLAYERSLICE"))) { app.ui.showSettings = true; app.ui.settingsTab = 5; }
+            if (ImGui::MenuItem(T("Atalhos de teclado"))) openSettings(5);
+            if (ImGui::MenuItem(T("Como usar"))) openSettings(7);
+            if (ImGui::MenuItem(T("Novidades desta versão"))) openSettings(8);
+            ImGui::Separator();
+            if (ImGui::MenuItem(T("Sobre o PLAYERSLICE"))) openSettings(9);
             ImGui::EndMenu();
         }
+        // "Definições" abre logo a janela (sem submenu)
+        if (ImGui::MenuItem(T("Definições"))) openSettings(app.ui.settingsTab);
+
         // indicador à direita na barra de menus
         const char* st = app.anyLive() ? T("● NO AR") : T("○ saídas desligadas");
         float tw = ImGui::CalcTextSize(st).x;

@@ -1,6 +1,7 @@
 #include "video/VideoPlayer.h"
 #include "core/Log.h"
 #include "core/ThreadPool.h"
+#include "core/Settings.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -123,6 +124,7 @@ VideoPlayer::Frame::~Frame() { if (hw) av_frame_free(&hw); }
 
 VideoPlayer::VideoPlayer(const std::string& pathUtf8, LoopMode loop, float speed)
     : m_path(pathUtf8), m_loop(loop), m_speed(speed) {
+    m_maxQueue = (size_t)std::clamp(settings().decodeBuffer, 3, 16);
     m_thread = std::thread([this] { threadMain(); });
 }
 
@@ -268,7 +270,7 @@ bool VideoPlayer::openAndRun() {
         g.dec->pkt_timebase = tb;
 
         bool hw = false;
-        if (VideoSystem::hwDevice() && codecLikesHw(par->codec_id)) {
+        if (settings().hwDecode && VideoSystem::hwDevice() && codecLikesHw(par->codec_id)) {
             for (int i = 0;; ++i) {
                 const AVCodecHWConfig* c = avcodec_get_hw_config(codec, i);
                 if (!c) break;

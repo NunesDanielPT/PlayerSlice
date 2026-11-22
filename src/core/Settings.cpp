@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 using nlohmann::json;
 using Microsoft::WRL::ComPtr;
@@ -111,6 +112,11 @@ bool Settings::load() {
         outputsOffBlack = j.value("outputsOffBlack", outputsOffBlack);
         startOutputsLive = j.value("startOutputsLive", startOutputsLive);
         checkUpdates = j.value("checkUpdates", checkUpdates);
+        priority = j.value("priority", priority);
+        preventSleep = j.value("preventSleep", preventSleep);
+        hwDecode = j.value("hwDecode", hwDecode);
+        decodeBuffer = std::clamp(j.value("decodeBuffer", decodeBuffer), 3, 16);
+        limitUiWhenLive = j.value("limitUiWhenLive", limitUiWhenLive);
         if (j.contains("keys")) {
             for (int i = 0; i < (int)Action::Count; ++i) {
                 auto it = j["keys"].find(kActionIds[i]);
@@ -132,6 +138,8 @@ bool Settings::save() const {
     j["language"] = language; j["gpu"] = gpu; j["network"] = network;
     j["audioDevice"] = audioDevice; j["audioName"] = audioName;
     j["outputsOffBlack"] = outputsOffBlack; j["startOutputsLive"] = startOutputsLive; j["checkUpdates"] = checkUpdates;
+    j["priority"] = priority; j["preventSleep"] = preventSleep; j["hwDecode"] = hwDecode;
+    j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive;
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = keys[i];
         j["keys"][kActionIds[i]] = {{"key", b.key}, {"ctrl", b.ctrl}, {"shift", b.shift}, {"alt", b.alt}};

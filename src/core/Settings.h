@@ -39,6 +39,12 @@ struct Settings {
     bool        outputsOffBlack = true;   // ao desligar: true = preto, false = fechar janela
     bool        startOutputsLive = false; // ligar saídas ao abrir um projeto
     bool        checkUpdates = true;      // procurar atualizações ao abrir
+    // performance
+    int         priority = 2;             // 0 normal, 1 acima do normal, 2 alta
+    bool        preventSleep = true;      // impedir suspensão / ecrãs a desligar
+    bool        hwDecode = true;          // descodificação H.264/H.265 pela placa gráfica
+    int         decodeBuffer = 6;         // frames em fila por clip (3..16)
+    bool        limitUiWhenLive = true;   // interface a 30 fps com saídas no ar (mais GPU para as saídas)
     KeyBinding  keys[(int)Action::Count];
 
     void resetKeys();

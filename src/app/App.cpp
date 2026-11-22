@@ -193,6 +193,13 @@ void App::runAction(int a) {
     }
 }
 
+void App::applyPerformance() {
+    const Settings& s = settings();
+    DWORD cls = s.priority >= 2 ? HIGH_PRIORITY_CLASS : s.priority == 1 ? ABOVE_NORMAL_PRIORITY_CLASS : NORMAL_PRIORITY_CLASS;
+    SetPriorityClass(GetCurrentProcess(), cls);
+    SetThreadExecutionState(s.preventSleep ? (ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED) : ES_CONTINUOUS);
+}
+
 void App::applyLanguage() {
     setLanguage(langFromCode(settings().language));
 }
@@ -357,21 +364,27 @@ void App::frame() {
     auto live = [this](uint32_t id) { return isLive(id); };
     outputs.sync(project, displays, live, settings().outputsOffBlack);
 
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-    drawUI(*this);
-    ImGui::Render();
+    // com saídas no ar a interface pode ir a 30 fps: as saídas continuam ao ritmo do vsync
+    bool drawUi = !(settings().limitUiWhenLive && anyLive() && outputs.count() > 0) || now - m_lastUi >= 1.0 / 30.0 - 0.002;
+    if (drawUi) {
+        m_lastUi = now;
+        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+        drawUI(*this);
+        ImGui::Render();
 
-    Gfx& G = gfx();
-    RECT cr; GetClientRect(m_hwnd, &cr);
-    G.setTarget(m_rtv.Get(), cr.right - cr.left, cr.bottom - cr.top);
-    G.clear(m_rtv.Get(), 0.08f, 0.08f, 0.09f, 1);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        Gfx& G = gfx();
+        RECT cr; GetClientRect(m_hwnd, &cr);
+        G.setTarget(m_rtv.Get(), cr.right - cr.left, cr.bottom - cr.top);
+        G.clear(m_rtv.Get(), 0.08f, 0.08f, 0.09f, 1);
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    }
 
     bool vsynced = false;
     outputs.present(comp, live, vsynced);
-    m_swap->Present(vsynced ? 0 : 1, 0);
+    if (drawUi) m_swap->Present(vsynced ? 0 : 1, 0);
+    else if (!vsynced) Sleep(1);
 
     autosave(now);
 }
@@ -384,17 +397,16 @@ int App::run(HINSTANCE inst) {
     CrashHandler::install(dir, emergencySaveThunk);
 
     // desempenho: prioridade alta, timer de 1 ms, sem throttling de energia
-    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
     timeBeginPeriod(1);
     PROCESS_POWER_THROTTLING_STATE pt{};
     pt.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
     pt.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
     pt.StateMask = 0;
     SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &pt, sizeof(pt));
-    SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED); // não desligar ecrãs
 
     settings().load();
     applyLanguage();
+    applyPerformance();
 
     std::string err;
     if (!gfx().init(settings().gpu, &err)) {

@@ -60,6 +60,7 @@ public:
     void setOutput(uint32_t id, bool on);
     void runAction(int action);    // Action (Settings.h)
     void applyLanguage();
+    void applyPerformance();
 
     // ficheiros
     void newProject();
@@ -105,6 +106,7 @@ private:
     bool m_displaysChanged = false;
     double m_lastAutosave = 0;
     double m_lastFrame = 0;
+    double m_lastUi = 0;
     std::deque<std::string> m_undo, m_redo;
 };
 

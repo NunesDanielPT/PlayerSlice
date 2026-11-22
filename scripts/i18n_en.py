@@ -97,6 +97,43 @@ EN = {
 'Ecrãs (como saem nas saídas)':'Screens (as sent to the outputs)','Slices (só o recorte)':'Slices (crop only)',
 'PREVIEW':'PREVIEW','PROGRAMA':'PROGRAM','Enviar para programa':'Send to program','Limpar':'Clear',
 '%d layer(s) no ar  ·  %dx%d':'%d layer(s) live  ·  %dx%d','Preview / Programa':'Preview / Program',
+'Janelas':'Windows','Performance':'Performance','Opções para tirar o máximo do PC durante um espetáculo.':'Options to get the most out of the PC during a show.',
+'Normal':'Normal','Acima do normal':'Above normal','Alta (recomendado)':'High (recommended)','Prioridade do processo':'Process priority',
+'Impedir que o Windows suspenda ou desligue os ecrãs':'Prevent Windows from sleeping or turning off displays',
+'Descodificar H.264 / H.265 na placa gráfica':'Decode H.264 / H.265 on the graphics card',
+'Desligar só se houver problemas com algum ficheiro. Aplica-se aos clips que forem disparados a seguir.':'Turn off only if some file has problems. Applies to clips triggered from now on.',
+'Frames em memória por clip':'Frames buffered per clip','Mais frames = mais tolerância a discos lentos, mas mais memória.':'More frames = more tolerance to slow disks, but more memory.',
+'Interface a 30 fps com saídas no ar (mais placa gráfica para as saídas)':'Interface at 30 fps while outputs are live (more GPU for the outputs)',
+'Recomendações':'Recommendations','Usa HAP ou HAP Q para vídeos grandes ou muitas layers ao mesmo tempo.':'Use HAP or HAP Q for large videos or many layers at the same time.',
+'Coloca os vídeos num disco SSD/NVMe interno.':'Keep the videos on an internal SSD/NVMe drive.',
+'No Windows: plano de energia \\"Desempenho máximo\\" e notificações desligadas.':'In Windows: \\"Ultimate performance\\" power plan and notifications off.',
+'No painel da NVIDIA: \\"Modo de gestão de energia\\" = \\"Preferir desempenho máximo\\".':'In the NVIDIA control panel: \\"Power management mode\\" = \\"Prefer maximum performance\\".',
+'Liga os monitores/processadores LED à mesma placa gráfica escolhida em Vídeo.':'Connect the monitors/LED processors to the same graphics card chosen in Video.',
+'Como usar':'How to use','Dicas':'Tips',
+'Ver em Preview/Programa: escolhe Composição, um Ecrã (como sai na saída) ou só uma Slice.':'View in Preview/Program: choose Composition, a Screen (as sent to the output) or just one Slice.',
+'No editor de slices, o fundo pode mostrar o Programa ou o Preview para alinhares as slices com o vídeo.':'In the slice editor, the background can show the Program or the Preview so you can align the slices with the video.',
+'Setas movem a slice 1 px (Shift = 10 px); Ctrl+D duplica; Del apaga.':'Arrow keys move the slice 1 px (Shift = 10 px); Ctrl+D duplicates; Del deletes.',
+'Novidades':"What's new",'Versão':'Version','  (instalada)':'  (installed)','Áudio':'Audio','Rede':'Network',
+'1. Composição':'1. Composition','Define em Vídeo a resolução da composição: uma tela grande onde cabem todos os conteúdos (ex.: 7680x2160).':'Set the composition resolution in Video: one large canvas that holds all the content (e.g. 7680x2160).',
+'2. Ecrãs':'2. Screens','Em \\"Saídas e Slices\\" cria um ecrã por cada saída da placa gráfica (ou processador LED) e escolhe a saída na lista.':'In \\"Outputs and Slices\\" create one screen per graphics card output (or LED processor) and pick the output from the list.',
+'3. Slices':'3. Slices','Cria uma slice por ledwall. No separador Entrada escolhes a zona da composição; no separador Saída escolhes onde aparece no ecrã. Arrasta, redimensiona pelos cantos e roda pelo círculo turquesa.':'Create one slice per LED wall. In the Input tab choose the area of the composition; in the Output tab choose where it appears on the screen. Drag, resize by the corners and rotate with the turquoise circle.',
+'4. Layers dedicadas':'4. Dedicated layers','Usa \\"Criar layer dedicada a esta slice\\": os vídeos dessa layer encaixam automaticamente no ledwall certo.':'Use \\"Create a layer dedicated to this slice\\": videos in that layer fit the right LED wall automatically.',
+'5. Vídeos':'5. Videos','Arrasta os vídeos do Explorador para as células da grelha (ou duplo clique numa célula vazia).':'Drag videos from Explorer onto the grid cells (or double-click an empty cell).',
+'6. Preview e Programa':'6. Preview and Program','Clica na metade de baixo de um clip para o ver em Preview; na metade de cima vai para o Programa (no ar). Enter envia o preview para o ar. O cabeçalho de uma coluna põe a coluna inteira no ar.':'Click the bottom half of a clip to see it in Preview; the top half sends it to Program (live). Enter sends the preview live. A column header puts the whole column live.',
+'7. Ligar as saídas':'7. Turning outputs on','Marca os ecrãs \\"No atalho\\" e carrega em F12 para ligar/desligar as saídas. Ctrl+F12 liga todas, Shift+F12 desliga todas.':'Mark screens \\"In shortcut\\" and press F12 to turn the outputs on/off. Ctrl+F12 turns all on, Shift+F12 turns all off.',
+'8. Gravar':'8. Saving','Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash.':'Ctrl+S saves the project (.psproj). There is an autosave every 30 s and recovery after a crash.',
+'Preview e Programa: metade de baixo do clip = preview, metade de cima = programa; Enter envia o preview para o ar.':'Preview and Program: bottom half of a clip = preview, top half = program; Enter sends the preview live.',
+'Monitores com \\"Ver\\": composição, um ecrã completo ou só uma slice.':'Monitors with \\"View\\": composition, a full screen or just one slice.',
+'Editor de slices com o vídeo do programa ou do preview no fundo.':'Slice editor with the program or preview video in the background.',
+'Novo menu e Definições: Geral, Vídeo, Áudio, Rede, Performance, Atalhos, Atualizações, Como usar, Novidades e Sobre.':"New menu and Settings: General, Video, Audio, Network, Performance, Shortcuts, Updates, How to use, What's new and About.",
+'Interface em Português e English.':'Interface in Portuguese and English.','Ligar/desligar saídas com F12 (ecrãs marcados \\"No atalho\\").':'Turn outputs on/off with F12 (screens marked \\"In shortcut\\").',
+'Atalhos de teclado configuráveis.':'Configurable keyboard shortcuts.','Atualizações automáticas a partir do GitHub.':'Automatic updates from GitHub.',
+'Instalador com escolha de idioma.':'Installer with language choice.','Miniaturas dos clips mais úteis (já não ficam pretas).':'More useful clip thumbnails (no longer black).',
+'Primeira versão: motor Direct3D 11 com HAP, H.264/H.265 pela placa gráfica e ProRes.':'First version: Direct3D 11 engine with HAP, H.264/H.265 on the graphics card and ProRes.',
+'Grelha de clips com layers e colunas, regiões por layer e crossfade.':'Clip grid with layers and columns, per-layer regions and crossfade.',
+'Editor de ecrãs e slices arrastável com snap, rotação e test pattern.':'Draggable screen and slice editor with snap, rotation and test pattern.',
+'Saídas por monitor, gravação automática e recuperação depois de um crash.':'Per-monitor outputs, autosave and recovery after a crash.',
+'Resolução da composição...':'Composition resolution...','Novidades desta versão':"What's new in this version",
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
 
@@ -111,10 +148,11 @@ if __name__ == '__main__':
         s = open(f, encoding='utf-8').read()
         for m in re.finditer(r'\bT\("((?:[^"\\]|\\.)*)"\)', s): add(m.group(1))
         for m in re.finditer(r'winTitle\("((?:[^"\\]|\\.)*)"', s): add(m.group(1))
-        for name in ('kActionNames[] = {', 'const char* tabs[] = {'):
+        for name in ('kActionNames[] = {', 'const char* tabs[] = {', 'const Step steps[] = {', 'const Rel rels[] = {'):
             if name in s:
                 i = s.index(name); blk = s[i:s.index('};', i)]
-                for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', blk): add(m.group(1))
+                for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', blk):
+                    if re.search(r'[A-Za-zÀ-ÿ]', m.group(1)): add(m.group(1))
     missing = [k for k in keys if k not in EN]
     if missing:
         print('SEM TRADUÇÃO EN:'); [print('  ', repr(k)) for k in missing]; sys.exit(1)
