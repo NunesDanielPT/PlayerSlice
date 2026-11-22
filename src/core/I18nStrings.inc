@@ -161,6 +161,7 @@
 {"Marca os ecrãs \"No atalho\" e carrega em F12 para ligar/desligar as saídas. Ctrl+F12 liga todas, Shift+F12 desliga todas.", "Mark screens \"In shortcut\" and press F12 to turn the outputs on/off. Ctrl+F12 turns all on, Shift+F12 turns all off."},
 {"8. Gravar", "8. Saving"},
 {"Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash.", "Ctrl+S saves the project (.psproj). There is an autosave every 30 s and recovery after a crash."},
+{"Correção: depois de atualizar da 0.1.0 as janelas ficavam soltas e pequenas; a disposição é reposta automaticamente.", "Fix: after updating from 0.1.0 the windows were floating and small; the layout is now restored automatically."},
 {"Preview e Programa: metade de baixo do clip = preview, metade de cima = programa; Enter envia o preview para o ar.", "Preview and Program: bottom half of a clip = preview, top half = program; Enter sends the preview live."},
 {"Monitores com \"Ver\": composição, um ecrã completo ou só uma slice.", "Monitors with \"View\": composition, a full screen or just one slice."},
 {"Editor de slices com o vídeo do programa ou do preview no fundo.", "Slice editor with the program or preview video in the background."},

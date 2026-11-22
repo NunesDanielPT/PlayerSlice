@@ -672,6 +672,7 @@ bool rectEditor(App& app, const char* id, Rect& r, float maxW, float maxH) {
 
 void drawSliceEditor(App& app) {
     if (app.ui.focusEditor) { ImGui::SetNextWindowFocus(); app.ui.focusEditor = false; }
+    ImGui::SetNextWindowSize(ImVec2(900, 500), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(winTitle("Saídas e Slices", "slices").c_str())) { ImGui::End(); return; }
     Screen* sc = selectedScreen(app);
 

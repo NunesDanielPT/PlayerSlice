@@ -235,6 +235,7 @@ void drawClipGrid(App& app) {
     Project& p = app.project;
     app.ui.cells.clear();
 
+    ImGui::SetNextWindowSize(ImVec2(900, 500), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(winTitle("Clips", "clips").c_str())) { ImGui::End(); return; }
 
     // barra de ferramentas

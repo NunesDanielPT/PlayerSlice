@@ -476,6 +476,16 @@ void drawUI(App& app) {
     ImGui::DockSpace(dock, ImVec2(0, 0), ImGuiDockNodeFlags_None);
     ImGui::End();
 
+    // proteção: logo após o arranque, se alguma janela principal não estiver encaixada
+    // (disposição antiga ou corrompida), repor a disposição de origem
+    if (ImGui::GetFrameCount() == 3) {
+        const char* ids[] = {"###clips", "###slices", "###comp", "###monitor", "###props", "###log"};
+        for (const char* id : ids) {
+            ImGuiWindow* w = ImGui::FindWindowByName(id);
+            if (w && w->DockId == 0) { app.ui.layoutBuilt = false; PS_WARN("Disposição das janelas inválida — reposta"); break; }
+        }
+    }
+
     drawClipGrid(app);
     drawSliceEditor(app);
     compositionWindow(app);

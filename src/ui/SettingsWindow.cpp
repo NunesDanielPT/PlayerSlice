@@ -151,6 +151,9 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.2.1", {
+            "Correção: depois de atualizar da 0.1.0 as janelas ficavam soltas e pequenas; a disposição é reposta automaticamente.",
+        }},
         {"0.2.0", {
             "Preview e Programa: metade de baixo do clip = preview, metade de cima = programa; Enter envia o preview para o ar.",
             "Monitores com \"Ver\": composição, um ecrã completo ou só uma slice.",

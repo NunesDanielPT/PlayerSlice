@@ -133,6 +133,7 @@ EN = {
 'Grelha de clips com layers e colunas, regiões por layer e crossfade.':'Clip grid with layers and columns, per-layer regions and crossfade.',
 'Editor de ecrãs e slices arrastável com snap, rotação e test pattern.':'Draggable screen and slice editor with snap, rotation and test pattern.',
 'Saídas por monitor, gravação automática e recuperação depois de um crash.':'Per-monitor outputs, autosave and recovery after a crash.',
+'Correção: depois de atualizar da 0.1.0 as janelas ficavam soltas e pequenas; a disposição é reposta automaticamente.':'Fix: after updating from 0.1.0 the windows were floating and small; the layout is now restored automatically.',
 'Resolução da composição...':'Composition resolution...','Novidades desta versão':"What's new in this version",
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
