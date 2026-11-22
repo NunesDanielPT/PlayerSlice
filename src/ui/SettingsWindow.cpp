@@ -215,6 +215,13 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.4.1", {
+            "Clip Time como no Resolume: hora do sistema, clip e layer selecionados e cada layer com o tempo que falta.",
+            "Link do Clip Time na rede: qualquer pessoa na mesma rede vê o Clip Time num browser (telemóvel, tablet, PC).",
+            "Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.",
+            "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
+            "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
+        }},
         {"0.4.0", {
             "Efeitos: Cor, Inverter, Tingir, Preto e branco, Limiar, Espelho, Pixelizar, Separação RGB, Vinheta e Strobe, no clip, na layer ou na composição.",
             "Painel Efeitos: arrasta um efeito para um clip, o nome de uma layer ou um painel de propriedades.",

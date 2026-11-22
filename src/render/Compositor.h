@@ -67,6 +67,7 @@ private:
     std::map<uint32_t, RenderTarget> m_screenRT;
     std::map<uint32_t, LayerRuntime> m_layers;
     double m_now = 0;
+    uint64_t m_frameNo = 0;
 
     std::unique_ptr<VideoPlayer> m_prev;
     Clip     m_prevClip;

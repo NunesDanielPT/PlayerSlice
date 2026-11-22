@@ -5,6 +5,7 @@
 #include "core/Settings.h"
 #include "core/Updater.h"
 #include "core/Osc.h"
+#include "core/WebServer.h"
 #include "ui/UI.h"
 #include "video/VideoPlayer.h"
 #include "video/Thumbnail.h"
@@ -444,6 +445,9 @@ void App::frame() {
     comp.render(project);
     handleOsc();
     applyPendingLayout(*this);
+    // página Clip Time na rede (~20 atualizações/s)
+    static double lastWeb = 0;
+    if (WebServer::get().running() && now - lastWeb > 0.05) { lastWeb = now; WebServer::get().setClipTimeJson(clipTimeJson(*this)); }
 
     // limpar ids de ecrãs apagados ou sem dispositivo
     for (auto it = liveScreens.begin(); it != liveScreens.end();) {
@@ -524,6 +528,7 @@ int App::run(HINSTANCE inst) {
     newProject();
     loadUiState(*this);
     applyOsc();
+    WebServer::get().configure(settings().webEnabled, settings().webPort);
 
     // recuperar trabalho depois de um crash
     std::wstring rec = dir + L"\\crash_recovery.psproj";
@@ -559,6 +564,7 @@ int App::run(HINSTANCE inst) {
 
     saveUiState(*this);
     Osc::get().shutdown();
+    WebServer::get().shutdown();
     outputs.closeAll();
     comp.stopAll(project);
     comp.shutdown();

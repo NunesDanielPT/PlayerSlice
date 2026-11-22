@@ -233,6 +233,16 @@ EN = {
 'OSC para o Companion: entrada e saída com endereços compatíveis com o Resolume.':'OSC for Companion: input and output with Resolume-compatible addresses.',
 'Automático':'Automatic','Descrição':'Description','Tamanho':'Size','Frame rate':'Frame rate','Profundidade de cor':'Color depth',
 '16 bpc: gradientes sem bandas e efeitos mais precisos; usa o dobro da memória da placa.':'16 bpc: gradients without banding and more precise effects; uses twice the GPU memory.',
+'Fonte: ':'Source: ','Clip Time':'Clip Time','Hora do sistema':'System time','Clip selecionado - ':'Selected clip - ','Layer selecionada - ':'Selected layer - ',
+'Clip selecionado':'Selected clip','Layer selecionada':'Selected layer','Layers':'Layers','Link na rede':'Network link',
+'Partilhar o Clip Time num link':'Share the Clip Time in a link','Porta':'Port','Abre num browser de qualquer aparelho na mesma rede:':'Open in a browser on any device on the same network:',
+'Abrir':'Open','Na primeira vez o Windows pode pedir para permitir o acesso à rede: aceita.':'The first time, Windows may ask to allow network access: accept it.',
+'Opções':'Options','substituir':'replace','trocar':'swap',
+'Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).':'Drag layers by their name, with animation: ghost, faded source and a line where it will land (also for columns and clips).',
+'Clip Time como no Resolume: hora do sistema, clip e layer selecionados e cada layer com o tempo que falta.':'Clip Time like Resolume: system time, selected clip and layer, and each layer with the remaining time.',
+'Link do Clip Time na rede: qualquer pessoa na mesma rede vê o Clip Time num browser (telemóvel, tablet, PC).':'Clip Time network link: anyone on the same network can see the Clip Time in a browser (phone, tablet, PC).',
+'Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.':'Animated test pattern (bar, hand and frame counter) to check that the output is smooth.',
+'Input Selection mostra no fundo a layer escolhida como fonte da slice.':'Input Selection shows the layer chosen as the slice source in the background.',
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
 

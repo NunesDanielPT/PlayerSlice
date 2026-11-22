@@ -286,6 +286,7 @@ ID3D11ShaderResourceView* Compositor::sourceFor(uint32_t layerId) const {
 
 void Compositor::render(Project& p) {
     Gfx& G = gfx();
+    ++m_frameNo;
     const int cw = p.comp.width, ch = p.comp.height;
     const DXGI_FORMAT fmt = p.comp.colorDepth == 16 ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
     if (!m_comp.valid() || m_comp.w != cw || m_comp.h != ch || m_compFmt != fmt) {
@@ -428,6 +429,8 @@ void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTarge
         if (s.testPattern) {
             q.ps = PSKind::WarpTest;
             unpackColor(sl.color, q.color);
+            q.vid[0] = (float)std::fmod(m_now, 3600.0);   // animação do test pattern
+            q.vid[1] = (float)(m_frameNo % 100000);
             float ew = std::hypot(out[1][0] - out[0][0], out[1][1] - out[0][1]);
             float eh = std::hypot(out[3][0] - out[0][0], out[3][1] - out[0][1]);
             q.aspect = eh > 0 ? ew / eh : 1.f;

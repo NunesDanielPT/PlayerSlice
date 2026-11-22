@@ -104,6 +104,29 @@ float4 PS_Test(VSOut i) : SV_Target {
     float2 e = min(q, 1.0 - q) / max(fq, 1e-5);
     line_ = max(line_, 1.0 - smoothstep(1.0, 2.0, min(e.x, e.y)));
     col = lerp(col, float3(1, 1, 1), line_ * 0.85);
+
+    // --- animação para ver se está fluido (gVid.x = tempo em s, gVid.y = n.º do frame) ---
+    float tm = gVid.x, fr = gVid.y;
+    // barra vertical que varre o ecrã a velocidade constante (2 s por passagem)
+    float bx = frac(tm * 0.5);
+    float bar = 1.0 - smoothstep(0.0, max(fq.x * 3.0, 0.004), abs(q.x - bx));
+    col = lerp(col, float3(1, 1, 1), bar * 0.95);
+    // ponteiro a rodar dentro do círculo (1 volta a cada 2 s)
+    float2 dv = p - c;
+    float ang = atan2(dv.y, dv.x);
+    float target = frac(tm * 0.5) * 6.2831853 - 3.14159265;
+    float da = abs(atan2(sin(ang - target), cos(ang - target)));
+    float hand = (1.0 - smoothstep(0.0, 0.035, da)) * step(length(dv), r);
+    col = lerp(col, float3(1, 1, 1), hand * 0.85);
+    // fila de 10 quadrados em baixo: acende um por frame (um salto = frame perdido)
+    if (q.y > 0.84 && q.y < 0.94 && q.x > 0.1 && q.x < 0.9) {
+        float cellW = 0.08;
+        float idx = floor((q.x - 0.1) / cellW);
+        float lx = frac((q.x - 0.1) / cellW);
+        float inside = step(0.12, lx) * step(lx, 0.88);
+        float lit = (abs(idx - fmod(fr, 10.0)) < 0.5) ? 1.0 : 0.0;
+        col = lerp(col, lit > 0.5 ? float3(1, 1, 1) : float3(0.08, 0.08, 0.08), inside);
+    }
     return finish(col, 1);
 }
 

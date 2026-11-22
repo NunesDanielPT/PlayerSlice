@@ -18,6 +18,8 @@ void drawUpdateStatus(App& app, bool compact);
 void drawUpdatePopup(App& app);
 void compositionSettingsBody(App& app, bool popup);
 void drawLayoutMenu(App& app);
+void drawClipTime(App& app);
+std::string clipTimeJson(App& app);
 void applyPendingLayout(App& app);
 void saveUiState(App& app);
 void loadUiState(App& app);

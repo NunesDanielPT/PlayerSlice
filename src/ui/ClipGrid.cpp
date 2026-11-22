@@ -43,6 +43,43 @@ static int firstFreeColumn(Project& p, int li) {
     return (int)p.comp.columns.size() - 1;
 }
 
+// ---------------------------------------------------------------------------
+// animação de arrastar: origem esbatida, fantasma a seguir o rato, linha de inserção
+// ---------------------------------------------------------------------------
+static bool isDragging(const char* type, int a, int b = -1) {
+    const ImGuiPayload* pl = ImGui::GetDragDropPayload();
+    if (!pl || !pl->IsDataType(type)) return false;
+    const int* d = (const int*)pl->Data;
+    return d[0] == a && (b < 0 || (pl->DataSize >= (int)(2 * sizeof(int)) && d[1] == b));
+}
+
+static void dimSource(ImVec2 p0, ImVec2 p1) {
+    ImDrawList* fg = ImGui::GetWindowDrawList();
+    fg->AddRectFilled(p0, p1, IM_COL32(10, 10, 12, 170), 3);
+    fg->AddRect(p0, p1, IM_COL32(64, 224, 192, 160), 3, 0, 1.5f);
+}
+
+// linha de inserção (pulsa ligeiramente)
+static void insertLine(ImVec2 a, ImVec2 b) {
+    float t = (float)ImGui::GetTime();
+    int alpha = 180 + (int)(75 * std::sin(t * 10.f));
+    ImDrawList* fg = ImGui::GetForegroundDrawList();
+    fg->AddLine(a, b, IM_COL32(64, 224, 192, alpha), 4.f);
+    fg->AddCircleFilled(a, 5, IM_COL32(64, 224, 192, alpha));
+    fg->AddCircleFilled(b, 5, IM_COL32(64, 224, 192, alpha));
+}
+
+static void moveLayer(App& app, int from, int to) {
+    Project& p = app.project;
+    int n = (int)p.comp.layers.size();
+    if (from == to || from < 0 || to < 0 || from >= n || to >= n) return;
+    app.checkpoint();
+    Layer l = p.comp.layers[from];
+    p.comp.layers.erase(p.comp.layers.begin() + from);
+    p.comp.layers.insert(p.comp.layers.begin() + to, l);
+    app.ui.selLayer = to;
+}
+
 // paleta de cores para layers e colunas (0 = sem cor)
 static const uint32_t kSwatches[] = {0, 0xFF3C50D0, 0xFF30A060, 0xFFB0A030, 0xFFC07020, 0xFFB040C0, 0xFF3090E0, 0xFF808080};
 static ImU32 tintU32(uint32_t c, int a) { return IM_COL32(c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, a); }
@@ -240,6 +277,18 @@ static void layerHeader(App& app, int li, float rowH) {
     } else {
         if (ImGui::InvisibleButton("##sel", ImVec2(w - 8, 18))) app.ui.selLayer = li;
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) app.ui.renameLayer = l.id;
+        if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        // arrastar a layer pelo nome para mudar a ordem
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
+            int pl[2] = {li, 0};
+            ImGui::SetDragDropPayload("PS_LAYER", pl, sizeof(pl));
+            ImVec2 gp = ImGui::GetCursorScreenPos();
+            ImGui::Dummy(ImVec2(200, 26));
+            ImDrawList* td = ImGui::GetWindowDrawList();
+            td->AddRectFilled(gp, ImVec2(gp.x + 200, gp.y + 26), l.color ? tintU32(l.color, 200) : IM_COL32(40, 110, 96, 230), 3);
+            td->AddText(ImVec2(gp.x + 8, gp.y + 5), IM_COL32(255, 255, 255, 255), l.name.c_str());
+            ImGui::EndDragDropSource();
+        }
         ImGui::SetCursorScreenPos(ImVec2(p0.x + 8, p0.y + 4));
         ImGui::TextUnformatted(l.name.c_str());
         std::string info;
@@ -280,7 +329,17 @@ static void layerHeader(App& app, int li, float rowH) {
     ImGui::SetCursorScreenPos(p0);
     ImGui::InvisibleButton("##ctx", ImVec2(w, rowH - 2), ImGuiButtonFlags_MouseButtonRight);
     app.ui.cells.push_back({li, -1, p0.x, p0.y, p0.x + w, p0.y + rowH - 2});
+    if (isDragging("PS_LAYER", li)) dimSource(p0, ImVec2(p0.x + w, p0.y + rowH - 2));
     if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_LAYER", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+            int from = ((const int*)pl->Data)[0];
+            if (from != li) {
+                float y = from < li ? p0.y + rowH : p0.y - 2;     // cai por baixo / por cima desta layer
+                float gridW = ImGui::GetWindowContentRegionMax().x + ImGui::GetWindowPos().x - p0.x;
+                insertLine(ImVec2(p0.x, y), ImVec2(p0.x + std::max(w, gridW), y));
+            }
+            if (pl->IsDelivery()) moveLayer(app, from, li);
+        }
         if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_CLIP")) {
             CellPayload src = *(const CellPayload*)pl->Data;
             if (src.layer != li && !l.locked) {
@@ -407,16 +466,35 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
     if (inPreview) dl->AddText(ImVec2(p0.x + 5, p0.y + 4), IM_COL32(240, 170, 40, 255), "PV");
 
     // arrastar clips entre células (Ctrl = copiar)
-    if (!c.empty() && !l.locked && ImGui::BeginDragDropSource()) {
+    if (!c.empty() && !l.locked && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
         CellPayload pl{li, ci};
         ImGui::SetDragDropPayload("PS_CLIP", &pl, sizeof(pl));
-        ImGui::Text("%s", c.name.c_str());
+        ImVec2 gp = ImGui::GetCursorScreenPos();
+        ImGui::Dummy(ImVec2(cellW, cellH));
+        ImDrawList* td = ImGui::GetWindowDrawList();
+        td->AddRectFilled(gp, ImVec2(gp.x + cellW, gp.y + cellH), IM_COL32(18, 18, 20, 240), 3);
+        auto th = ThumbnailCache::get().request(c.path);
+        if (th->srv) {
+            float s = std::min((cellW - 4) / th->w, (cellH - 22) / th->h);
+            ImVec2 i0(gp.x + 2 + (cellW - 4 - th->w * s) * 0.5f, gp.y + 2);
+            td->AddImage(texId(th->srv.Get()), i0, ImVec2(i0.x + th->w * s, i0.y + th->h * s), ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 230));
+        }
+        td->AddText(ImVec2(gp.x + 5, gp.y + cellH - 18), IM_COL32(230, 230, 230, 255), c.name.c_str());
+        td->AddRect(gp, ImVec2(gp.x + cellW, gp.y + cellH), col::Accent, 3, 0, 2.f);
+        if (io.KeyCtrl) td->AddText(ImVec2(gp.x + cellW - 18, gp.y + 4), col::Accent, "+");
         ImGui::EndDragDropSource();
     }
+    if (isDragging("PS_CLIP", li, ci)) dimSource(p0, p1);
     if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_CLIP")) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_CLIP", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
             CellPayload src = *(const CellPayload*)pl->Data;
-            if (!(src.layer == li && src.col == ci) && !l.locked) {
+            if (!(src.layer == li && src.col == ci) && !pl->IsDelivery()) {
+                float t = (float)ImGui::GetTime();
+                int a = 160 + (int)(80 * std::sin(t * 10.f));
+                ImGui::GetForegroundDrawList()->AddRect(ImVec2(p0.x - 2, p0.y - 2), ImVec2(p1.x + 2, p1.y + 2), IM_COL32(64, 224, 192, a), 4, 0, 3.f);
+                if (!c.empty()) ImGui::GetForegroundDrawList()->AddText(ImVec2(p0.x + 6, p0.y + 6), IM_COL32(255, 255, 255, 220), io.KeyCtrl ? T("substituir") : T("trocar"));
+            }
+            if (pl->IsDelivery() && !(src.layer == li && src.col == ci) && !l.locked) {
                 app.checkpoint();
                 Clip& from = p.comp.layers[src.layer].clips[src.col];
                 if (io.KeyCtrl) { Clip cp = from; cp.id = p.newId(); c = cp; }
@@ -501,13 +579,31 @@ static bool columnHeader(App& app, int c, float cellW) {
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) app.ui.renameColumn = c;
         if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left))
             ImGui::SetTooltip("%s", T("Clique: pôr a coluna inteira no ar · Arrastar: mudar a ordem · Duplo clique: renomear"));
-        if (ImGui::BeginDragDropSource()) {
-            ImGui::SetDragDropPayload("PS_COL", &c, sizeof(int));
-            ImGui::Text("%s", col.name.c_str());
+        ImVec2 h0 = ImGui::GetItemRectMin(), h1 = ImGui::GetItemRectMax();
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
+            int pl[2] = {c, 0};
+            ImGui::SetDragDropPayload("PS_COL", pl, sizeof(pl));
+            ImVec2 gp = ImGui::GetCursorScreenPos();
+            ImGui::Dummy(ImVec2(cellW, 24));
+            ImGui::GetWindowDrawList()->AddRectFilled(gp, ImVec2(gp.x + cellW, gp.y + 24), ImGui::GetColorU32(bc), 3);
+            ImGui::GetWindowDrawList()->AddText(ImVec2(gp.x + 8, gp.y + 4), IM_COL32(255, 255, 255, 255), col.name.c_str());
             ImGui::EndDragDropSource();
         }
+        if (isDragging("PS_COL", c)) {
+            // esbater a coluna inteira (cabeçalho + células)
+            float bottom = ImGui::GetWindowPos().y + ImGui::GetWindowSize().y;
+            ImGui::GetForegroundDrawList()->AddRectFilled(h0, ImVec2(h1.x, bottom), IM_COL32(10, 10, 12, 120), 3);
+        }
         if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_COL")) moveColumn(app, *(const int*)pl->Data, c);
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_COL", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+                int from = ((const int*)pl->Data)[0];
+                if (from != c) {
+                    float x = from < c ? h1.x + 3 : h0.x - 3;
+                    float bottom = ImGui::GetWindowPos().y + ImGui::GetWindowSize().y - 8;
+                    insertLine(ImVec2(x, h0.y), ImVec2(x, bottom));
+                }
+                if (pl->IsDelivery()) moveColumn(app, from, c);
+            }
             ImGui::EndDragDropTarget();
         }
     }

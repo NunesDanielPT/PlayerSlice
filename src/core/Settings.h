@@ -51,6 +51,9 @@ struct Settings {
     bool        oscOut = false;
     std::string oscOutAddr = "127.0.0.1";
     int         oscOutPort = 7001;
+    // link na rede (página Clip Time)
+    bool        webEnabled = false;
+    int         webPort = 8090;
     KeyBinding  keys[(int)Action::Count];
 
     void resetKeys();

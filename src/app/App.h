@@ -51,7 +51,11 @@ struct UIState {
     struct Panels {
         bool clips = true, monitors = true, outputs = true, log = true, effects = true;
         bool propComp = true, propLayer = true, propColumn = true, propClip = true;
+        bool clipTime = true;
     } panel;
+    // Clip Time: o que mostrar
+    bool ctSystem = true, ctSelClip = true, ctSelLayer = true;
+    std::set<uint32_t> ctHiddenLayers;
     // monitores extra (menu Layout → + monitor)
     struct ExtraMonitor { uint32_t id; bool preview; int mode = 0; uint32_t viewId = 0; bool open = true; };
     std::vector<ExtraMonitor> extraMonitors;

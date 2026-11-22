@@ -29,7 +29,10 @@ static json uiStateJson(App& app) {
     auto& pn = app.ui.panel;
     json j;
     j["panels"] = {{"clips", pn.clips}, {"monitors", pn.monitors}, {"outputs", pn.outputs}, {"log", pn.log}, {"effects", pn.effects},
-                   {"propComp", pn.propComp}, {"propLayer", pn.propLayer}, {"propColumn", pn.propColumn}, {"propClip", pn.propClip}};
+                   {"propComp", pn.propComp}, {"propLayer", pn.propLayer}, {"propColumn", pn.propColumn}, {"propClip", pn.propClip},
+                   {"clipTime", pn.clipTime}};
+    j["clipTime"] = {{"system", app.ui.ctSystem}, {"selClip", app.ui.ctSelClip}, {"selLayer", app.ui.ctSelLayer},
+                     {"hidden", std::vector<uint32_t>(app.ui.ctHiddenLayers.begin(), app.ui.ctHiddenLayers.end())}};
     j["monitors"] = json::array();
     for (auto& m : app.ui.extraMonitors)
         j["monitors"].push_back({{"id", m.id}, {"preview", m.preview}, {"mode", m.mode}, {"view", m.viewId}});
@@ -46,6 +49,13 @@ static void applyUiState(App& app, const json& j) {
         pn.log = p.value("log", true); pn.effects = p.value("effects", true);
         pn.propComp = p.value("propComp", true); pn.propLayer = p.value("propLayer", true);
         pn.propColumn = p.value("propColumn", true); pn.propClip = p.value("propClip", true);
+        pn.clipTime = p.value("clipTime", true);
+    }
+    if (j.contains("clipTime")) {
+        auto& c = j["clipTime"];
+        app.ui.ctSystem = c.value("system", true); app.ui.ctSelClip = c.value("selClip", true); app.ui.ctSelLayer = c.value("selLayer", true);
+        app.ui.ctHiddenLayers.clear();
+        if (c.contains("hidden") && c["hidden"].is_array()) for (auto& h : c["hidden"]) if (h.is_number()) app.ui.ctHiddenLayers.insert(h.get<uint32_t>());
     }
     app.ui.extraMonitors.clear();
     for (auto& m : j.value("monitors", json::array())) {
@@ -107,6 +117,7 @@ void drawLayoutMenu(App& app) {
         ImGui::MenuItem(T("Preview / Programa"), nullptr, &pn.monitors);
         ImGui::MenuItem(T("Monitor de saídas"), nullptr, &pn.outputs);
         ImGui::MenuItem(T("Efeitos"), nullptr, &pn.effects);
+        ImGui::MenuItem(T("Clip Time"), nullptr, &pn.clipTime);
         ImGui::MenuItem(T("Registo"), nullptr, &pn.log);
         ImGui::SeparatorText(T("Propriedades"));
         ImGui::MenuItem(T("Composição"), nullptr, &pn.propComp);

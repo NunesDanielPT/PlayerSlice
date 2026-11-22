@@ -120,6 +120,8 @@ bool Settings::load() {
         oscIn = j.value("oscIn", oscIn); oscInPort = std::clamp(j.value("oscInPort", oscInPort), 1, 65535);
         oscOut = j.value("oscOut", oscOut); oscOutAddr = j.value("oscOutAddr", oscOutAddr);
         oscOutPort = std::clamp(j.value("oscOutPort", oscOutPort), 1, 65535);
+        webEnabled = j.value("webEnabled", webEnabled);
+        webPort = std::clamp(j.value("webPort", webPort), 1, 65535);
         if (j.contains("keys")) {
             for (int i = 0; i < (int)Action::Count; ++i) {
                 auto it = j["keys"].find(kActionIds[i]);
@@ -145,6 +147,7 @@ bool Settings::save() const {
     j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive;
     j["oscIn"] = oscIn; j["oscInPort"] = oscInPort; j["oscOut"] = oscOut;
     j["oscOutAddr"] = oscOutAddr; j["oscOutPort"] = oscOutPort;
+    j["webEnabled"] = webEnabled; j["webPort"] = webPort;
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = keys[i];
         j["keys"][kActionIds[i]] = {{"key", b.key}, {"ctrl", b.ctrl}, {"shift", b.shift}, {"alt", b.alt}};

@@ -29,6 +29,7 @@ static void buildDefaultLayout(ImGuiID dock) {
     ImGui::DockBuilderDockWindow("###monitor", bl2);
     ImGui::DockBuilderDockWindow("###effects", bl2);
     ImGui::DockBuilderDockWindow("###log", bl2);
+    ImGui::DockBuilderDockWindow("###cliptime", bl2);
     ImGui::DockBuilderDockWindow("###props_clip", rightTop);
     ImGui::DockBuilderDockWindow("###props_col", rightTop);
     ImGui::DockBuilderDockWindow("###props_layer", rightBottom);
@@ -444,6 +445,7 @@ void drawUI(App& app) {
     extraMonitors(app);
     outputsMonitor(app);
     drawProperties(app);
+    drawClipTime(app);
     logWindow(app);
     statusBar(app);
     compSettingsPopup(app);

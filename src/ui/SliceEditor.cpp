@@ -574,8 +574,19 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
     if (app.ui.editorBg != 2) {
         const bool prev = app.ui.editorBg == 1;
         if (tab == 0) {
-            const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
-            if (rt.valid()) dl->AddImage(texId(rt.srv.Get()), a0, a1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, bgAlpha));
+            // Input Selection: se a slice selecionada usa uma layer como fonte, mostrar só essa layer
+            ID3D11ShaderResourceView* srv = nullptr;
+            const Slice* bgSl = selectedSlice(app, sc);
+            if (!prev && bgSl && bgSl->sourceLayer && p.layerIndex(bgSl->sourceLayer) >= 0) srv = app.comp.programSource(bgSl->sourceLayer);
+            else { const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT(); if (rt.valid()) srv = rt.srv.Get(); }
+            if (srv) dl->AddImage(texId(srv), a0, a1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, bgAlpha));
+            if (!prev && bgSl && bgSl->sourceLayer) {
+                int li = p.layerIndex(bgSl->sourceLayer);
+                if (li >= 0) {
+                    std::string t = std::string(T("Fonte: ")) + p.comp.layers[li].name;
+                    dl->AddText(ImVec2(a0.x + 6, a0.y + 6), IM_COL32(255, 255, 255, 200), t.c_str());
+                }
+            }
         } else {
             const RenderTarget* rt = nullptr;
             if (prev) { app.comp.requestPreviewScreen(sc.id); rt = app.comp.previewScreenRT(sc.id); }
