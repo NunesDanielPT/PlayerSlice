@@ -38,16 +38,18 @@ static const char* kPage = R"HTML(<!DOCTYPE html>
 <html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PLAYERSLICE · Clip Time</title>
 <style>
+ *{box-sizing:border-box}
  body{margin:0;background:#151619;color:#e6e8eb;font-family:Segoe UI,Roboto,Arial,sans-serif}
  header{display:flex;justify-content:space-between;align-items:center;padding:10px 18px;background:#1c1d20;border-bottom:1px solid #2e3035}
  header b{color:#40e0c0;letter-spacing:.5px} #st{font-size:13px;color:#888}
- #grid{display:flex;flex-wrap:wrap;gap:28px;padding:24px 18px}
- .it{min-width:280px;flex:1 1 280px}
- .lb{font-size:15px;color:#cfd2d6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- .tc{font-family:Consolas,Menlo,monospace;font-size:clamp(40px,7vw,72px);line-height:1.1;letter-spacing:1px}
- .live .lb,.live .tc{color:#b8f060} .warn .tc{color:#ffb040} .end .tc{color:#ff5050}
- .bar{height:3px;background:#2e3035;margin-top:4px}.bar i{display:block;height:3px;background:#e6e8eb;width:0}
- .live .bar i{background:#b8f060}
+ #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:14px;padding:16px}
+ .it{background:#1c1d20;border:1px solid #2a2c31;border-radius:8px;padding:12px 14px 14px;container-type:inline-size;min-width:0;overflow:hidden}
+ .lb{font-size:14px;color:#cfd2d6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}
+ .tc{font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:min(13cqw,88px);line-height:1.1;white-space:nowrap;font-variant-numeric:tabular-nums}
+ .live{border-color:#4a6a2a} .live .lb,.live .tc{color:#b8f060}
+ .warn .tc{color:#ffb040} .end .tc{color:#ff5050} .end{border-color:#6a2a2a}
+ .bar{height:4px;background:#2e3035;margin-top:8px;border-radius:2px;overflow:hidden}.bar i{display:block;height:4px;background:#e6e8eb;width:0}
+ .live .bar i{background:#b8f060} .warn .bar i{background:#ffb040} .end .bar i{background:#ff5050}
 </style></head><body>
 <header><b>PLAYERSLICE · Clip Time</b><span id="st">a ligar…</span></header>
 <div id="grid"></div>

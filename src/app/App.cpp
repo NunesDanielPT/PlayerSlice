@@ -443,6 +443,41 @@ LRESULT App::handleMessage(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         }
         m_running = false;
         return 0;
+    case WM_TIMER:
+        // Só chega aqui a partir de ciclos modais do Windows (mover/redimensionar a janela,
+        // diálogos de ficheiros, MessageBox): o ciclo principal deita fora os WM_TIMER.
+        // Assim as saídas nunca congelam.
+        if (wp == 1) {
+            static bool inOutputsOnly = false;
+            if (m_inUi) {                          // diálogo aberto a partir da interface
+                if (!inOutputsOnly) { inOutputsOnly = true; outputsOnlyFrame(); inOutputsOnly = false; }
+            } else if (!m_inTimerFrame) {          // a mover/redimensionar a janela
+                m_inTimerFrame = true; frame(); m_inTimerFrame = false;
+            }
+        }
+        return 0;
+    case WM_MOVING:
+    case WM_SIZING: {
+        // a janela principal não entra nos ecrãs que estão a ser usados como saída
+        RECT* r = (RECT*)lp;
+        for (const RECT& m : outputs.monitorRects()) {
+            RECT x;
+            if (!IntersectRect(&x, r, &m)) continue;
+            if (msg == WM_MOVING) {
+                LONG w = r->right - r->left, h = r->bottom - r->top;
+                LONG cx = (r->left + r->right) / 2, mcx = (m.left + m.right) / 2;
+                if (cx < mcx) { r->right = m.left; r->left = r->right - w; }
+                else { r->left = m.right; r->right = r->left + w; }
+                (void)h;
+            } else {
+                if (r->right > m.left && r->left < m.left) r->right = m.left;
+                else if (r->left < m.right && r->right > m.right) r->left = m.right;
+                if (r->bottom > m.top && r->top < m.top) r->bottom = m.top;
+                else if (r->top < m.bottom && r->bottom > m.bottom) r->top = m.bottom;
+            }
+        }
+        return TRUE;
+    }
     case WM_GETMINMAXINFO: {
         auto* mm = (MINMAXINFO*)lp;
         mm->ptMinTrackSize = {960, 600};
@@ -502,6 +537,16 @@ void App::resizeSwapchain() {
     gfx().dev()->CreateRenderTargetView(bb.Get(), nullptr, &m_rtv);
 }
 
+void App::outputsOnlyFrame() {
+    double now = nowSeconds();
+    comp.update(project, now);
+    comp.render(project);
+    auto live = [this](uint32_t id) { return isLive(id); };
+    bool vsynced = false;
+    outputs.present(comp, live, vsynced);
+    if (!vsynced) Sleep(1);
+}
+
 void App::frame() {
     double now = nowSeconds();
     if (m_lastFrame > 0) {
@@ -539,7 +584,9 @@ void App::frame() {
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+        m_inUi = true;
         drawUI(*this);
+        m_inUi = false;
         ImGui::Render();
         pendingDrops.clear();
 
@@ -592,6 +639,7 @@ int App::run(HINSTANCE inst) {
         MessageBoxW(nullptr, fromUtf8(T("Não foi possível criar a janela principal")).c_str(), L"PLAYERSLICE", MB_ICONERROR);
         return 1;
     }
+    SetTimer(m_hwnd, 1, 10, nullptr);   // mantém as saídas vivas durante ciclos modais do Windows
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -635,6 +683,7 @@ int App::run(HINSTANCE inst) {
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
+            if (msg.message == WM_TIMER && msg.hwnd == m_hwnd && msg.wParam == 1) continue;   // ver WM_TIMER
             DispatchMessageW(&msg);
             if (msg.message == WM_QUIT) m_running = false;
         }

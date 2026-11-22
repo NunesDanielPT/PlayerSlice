@@ -216,6 +216,11 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.4.3", {
+            "As saídas já não congelam ao mover ou redimensionar a janela, nem com diálogos abertos (abrir ficheiros, avisos).",
+            "A janela principal não entra nos ecrãs usados como saída (sem contorno branco por cima da saída).",
+            "Página do link do Clip Time corrigida: cartões que se ajustam ao ecrã (PC, tablet e telemóvel) sem números sobrepostos.",
+        }},
         {"0.4.2", {
             "Clips novos entram no tamanho e proporção nativos.",
             "Moldura de transformação nos monitores de Preview e Programa: mover e esticar o clip com o rato (Shift = proporção, duplo clique = nativo).",

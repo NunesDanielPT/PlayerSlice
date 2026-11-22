@@ -126,6 +126,9 @@ private:
     bool initSwapchain();
     void resizeSwapchain();
     void frame();
+    void outputsOnlyFrame();        // só vídeo + saídas (durante diálogos / mover a janela)
+    bool m_inUi = false;            // a meio do desenho da interface
+    bool m_inTimerFrame = false;
     void autosave(double now);
     LRESULT handleMessage(HWND, UINT, WPARAM, LPARAM);
     static LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);
