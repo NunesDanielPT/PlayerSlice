@@ -61,6 +61,7 @@ struct UIState {
         bool clips = true, monitors = true, outputs = true, log = true, effects = true;
         bool propComp = true, propLayer = true, propColumn = true, propClip = true;
         bool clipTime = true;
+        bool timecode = false;
     } panel;
     // Clip Time: o que mostrar
     bool ctSystem = true, ctSelClip = true, ctSelLayer = true;
@@ -97,7 +98,11 @@ public:
     void runAction(int action);    // Action (Settings.h)
     void selectStack(int i);
     void localizeDefaultNames();
-    void matchOutputRefresh();     // saídas no ar → frequência do monitor = fps do projeto
+    void matchOutputRefresh();
+    void applyTimecode();          // Settings → módulo Timecode
+    void timecodeTriggers();       // disparar clips à hora marcada
+    void toggleTestPattern();      // todas as saídas
+    bool anyTestPattern() const;     // saídas no ar → frequência do monitor = fps do projeto
     std::map<std::string, float> m_hzApplied;   // monitor → fps já aplicado       // muda a stack visível (os clips no ar continuam)
     void newStack(bool duplicate);
     void applyLanguage();

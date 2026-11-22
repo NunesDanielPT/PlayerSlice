@@ -3,6 +3,7 @@
 //   Ctrl+clique / Shift+clique = selecionar vários; Ctrl+C / Ctrl+V / Ctrl+X / Delete
 //   Arrastar clips entre células, colunas pelo cabeçalho, efeitos do painel Efeitos
 #include "ui/UI.h"
+#include "core/Timecode.h"
 #include "core/I18n.h"
 #include "app/App.h"
 #include "video/Thumbnail.h"
@@ -463,6 +464,15 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
     ImU32 border = active ? col::Playing : inPreview ? IM_COL32(240, 170, 40, 255) : sel ? col::Accent : hovered ? IM_COL32(90, 94, 100, 255) : IM_COL32(48, 50, 55, 255);
     dl->AddRect(p0, p1, border, 3, 0, active || sel || inPreview ? 2.f : 1.f);
     if (inPreview) dl->AddText(ImVec2(p0.x + 5, p0.y + 4), IM_COL32(240, 170, 40, 255), "PV");
+    if (!c.empty() && c.tcMode != TcMode::Off) {
+        // etiqueta TC no canto (azul = segue; laranja = dispara)
+        const char* tg = "TC";
+        ImVec2 ts = ImGui::CalcTextSize(tg);
+        ImVec2 q(p1.x - ts.x - 9, p0.y + 4);
+        dl->AddRectFilled(ImVec2(q.x - 3, q.y - 1), ImVec2(q.x + ts.x + 3, q.y + ts.y), tcTriggers(c.tcMode) ? IM_COL32(220, 130, 30, 230) : IM_COL32(40, 120, 220, 230), 3);
+        dl->AddText(q, IM_COL32(255, 255, 255, 255), tg);
+        if (hovered) ImGui::SetTooltip(T("Timecode: %s"), tcFormat(c.tcStart, Timecode::get().status().fps).c_str());
+    }
 
     // arrastar clips entre células (Ctrl = copiar)
     if (!c.empty() && !l.locked && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {

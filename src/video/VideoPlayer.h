@@ -44,6 +44,10 @@ public:
     // thread de render: avança o relógio e envia para a GPU o frame devido.
     void update(double now);
     void restart();                       // volta ao início
+    // modo escravo (timecode): o tempo do clip vem de fora; chamar antes de update() em cada frame.
+    // t não é "dobrado" pelo loop (cresce sempre); o player trata do loop sem cortes.
+    void chase(double t);
+    bool chasing() const { return m_chase; }
     void setSpeed(float s);
     void setLoop(LoopMode m) { m_loop.store(m); }
 
@@ -96,6 +100,8 @@ private:
     std::thread m_thread;
     std::atomic<bool> m_stop{false};
     std::atomic<bool> m_restartReq{false};
+    std::atomic<bool> m_seekReq{false};
+    std::atomic<double> m_seekT{0};
     std::atomic<int> m_gen{0};
     std::atomic<State> m_state{State::Opening};
     std::atomic<LoopMode> m_loop;
@@ -114,6 +120,10 @@ private:
 
     // render thread
     bool   m_started = false;
+    bool   m_chase = false;
+    double m_chaseT = 0;
+    double m_seekSentT = -1;     // último salto pedido (render thread)
+    double m_seekSentAt = 0;
     double m_clockBase = 0;      // instante (now) correspondente ao tempo m_clockT
     double m_clockT = 0;
     bool   m_hasFrame = false;

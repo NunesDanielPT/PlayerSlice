@@ -172,6 +172,11 @@ void VideoPlayer::restart() {
     m_started = false;
 }
 
+void VideoPlayer::chase(double t) {
+    m_chase = true;
+    m_chaseT = t;
+}
+
 void VideoPlayer::setSpeed(float s) {
     // rebase do relógio para não saltar
     if (m_started) {
@@ -318,6 +323,7 @@ bool VideoPlayer::openAndRun() {
     double lastT = -frameDur;
     int consecutiveErrors = 0;
     bool firstPushed = false;
+    double seekTarget = -1;      // depois de um salto: ignorar frames antes deste tempo
     int gen = m_gen.load();
     int swW = 0, swH = 0, swFmt = -1;
     const YuvMatrix yuv709 = makeYuvMatrix(true, false), yuv601 = makeYuvMatrix(false, false);
@@ -344,6 +350,7 @@ bool VideoPlayer::openAndRun() {
         double t = rel + loopOffset;
         maxRelT = std::max(maxRelT, rel);
         lastT = t;
+        if (seekTarget >= 0) { if (t < seekTarget - frameDur * 0.5) return; seekTarget = -1; }
         // descartar frames muito atrasados (exceto o primeiro)
         if (firstPushed && t < m_playhead.load() - frameDur * 1.5) { m_dropped++; return; }
 
@@ -411,6 +418,22 @@ bool VideoPlayer::openAndRun() {
             loopOffset = 0; lastT = -frameDur;
             m_eof = false; firstPushed = false;
             m_playhead = 0;
+            seekTarget = -1;
+        }
+        if (m_seekReq.exchange(false)) {
+            gen = m_gen.load();
+            double t = std::max(0.0, m_seekT.load());
+            double base = 0;
+            if (loopLen > 0 && m_loop.load() == LoopMode::Loop) base = std::floor(t / loopLen) * loopLen;
+            else if (loopLen > 0) t = std::min(t, std::max(0.0, loopLen - frameDur));
+            int64_t ts = startPts + (int64_t)((t - base) / av_q2d(tb));
+            av_seek_frame(g.fmt, vs, ts, AVSEEK_FLAG_BACKWARD);
+            if (g.dec) avcodec_flush_buffers(g.dec);
+            clearQueue();
+            loopOffset = base; lastT = t - frameDur;
+            m_eof = false; firstPushed = false;
+            seekTarget = t;
+            m_playhead = t;
         }
 
         // fila cheia → esperar (sem ocupar CPU)
@@ -450,6 +473,7 @@ bool VideoPlayer::openAndRun() {
             double t = rel + loopOffset;
             maxRelT = std::max(maxRelT, rel);
             lastT = t;
+            if (seekTarget >= 0) { if (t < seekTarget - frameDur * 0.5) { av_packet_unref(g.pkt); continue; } seekTarget = -1; }
             if (firstPushed && t < m_playhead.load() - frameDur * 1.5) { m_dropped++; av_packet_unref(g.pkt); continue; }
 
             unsigned texCount = 0;
@@ -517,6 +541,36 @@ void VideoPlayer::update(double now) {
             dropped.push_back(std::move(m_queue.front()));
             m_queue.pop_front();
         }
+        double fps = m_info.fps > 0 ? m_info.fps : 50;
+        double fd = 1.0 / fps;
+        if (m_chase) {
+            // modo escravo: o playhead é o tempo pedido (timecode)
+            double target = m_chaseT;
+            const double dur = m_info.duration;
+            if (target < 0) target = 0;
+            if (dur > 0 && m_loop.load() != LoopMode::Loop) target = std::min(target, std::max(0.0, dur - fd));
+            double lo = m_hasFrame ? m_shownT : -1, hi = lo;
+            if (!m_queue.empty()) { lo = m_hasFrame ? std::min(lo, m_queue.front()->t) : m_queue.front()->t; hi = std::max(hi, m_queue.back()->t); }
+            bool waiting = m_seekSentT >= 0 && now - m_seekSentAt < 1.0 && std::fabs(target - m_seekSentT) < 0.5;
+            bool behind = lo >= 0 && target < lo - fd * 2.5;            // recuou
+            bool ahead = hi >= 0 ? target > hi + std::max(0.4, fd * 8) : target > 0.4;   // saltou para a frente
+            if (!waiting && (behind || ahead)) {
+                m_seekT = target;
+                m_gen++;
+                m_seekReq = true;
+                m_seekSentT = target; m_seekSentAt = now;
+            } else if (waiting && !m_queue.empty() && m_queue.front()->gen == m_gen.load()) m_seekSentT = -1;
+            const int g2 = m_gen.load();
+            while (!m_queue.empty() && m_queue.front()->gen != g2) { dropped.push_back(std::move(m_queue.front())); m_queue.pop_front(); }
+            while (!m_queue.empty() && m_queue.front()->t <= target + fd * 0.5) {
+                if (show) dropped.push_back(std::move(show));
+                show = std::move(m_queue.front());
+                m_queue.pop_front();
+            }
+            if (!show && !m_hasFrame && !m_queue.empty()) { show = std::move(m_queue.front()); m_queue.pop_front(); }
+            m_playhead = target;
+            m_started = true;
+        } else {
         if (!m_started) {
             if (m_queue.empty()) return;
             // o relógio arranca quando o primeiro frame está pronto → sem saltos no início
@@ -527,8 +581,7 @@ void VideoPlayer::update(double now) {
         double speed = m_speed.load();
         double playhead = m_clockT + (now - m_clockBase) * speed;
         // tolerância de meio frame para evitar "jitter" com relógios quase iguais
-        double fps = m_info.fps > 0 ? m_info.fps : 50;
-        double tol = 0.5 / fps;
+        double tol = 0.5 * fd;
         while (!m_queue.empty() && m_queue.front()->t <= playhead + tol) {
             if (show) dropped.push_back(std::move(show));
             show = std::move(m_queue.front());
@@ -540,6 +593,7 @@ void VideoPlayer::update(double now) {
             m_queue.pop_front();
         }
         m_playhead = playhead;
+        }
     }
     m_cv.notify_all();
 

@@ -221,6 +221,7 @@ static void clipPanel(App& app) {
         param(app, T("Opacidade"), &c.opacity, 0, 1, 1, "%.2f");
     }
     if (ImGui::CollapsingHeader(T("Transformar##clip"), ImGuiTreeNodeFlags_DefaultOpen)) clipTransformControls(app, c);
+    if (ImGui::CollapsingHeader(T("Timecode##clip"), c.tcMode != TcMode::Off ? ImGuiTreeNodeFlags_DefaultOpen : 0)) clipTimecodeControls(app, c);
     if (ImGui::CollapsingHeader(T("Efeitos##clip"), ImGuiTreeNodeFlags_DefaultOpen))
         effectsEditor(app, c.effects, "clipfx");
     endPanel();

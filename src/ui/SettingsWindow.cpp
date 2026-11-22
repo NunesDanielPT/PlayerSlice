@@ -204,7 +204,8 @@ void sectionHowTo() {
         {"7. Preview e Programa", "Clica na metade de baixo de um clip para o ver em Preview; na metade de cima vai para o Programa (no ar). Enter envia o preview para o ar. O cabeçalho de uma coluna põe a coluna inteira no ar."},
         {"8. Ligar as saídas", "Marca os ecrãs \"No atalho\" e carrega em F12 para ligar/desligar as saídas. Ctrl+F12 liga todas, Shift+F12 desliga todas."},
         {"9. Efeitos e OSC", "Arrasta efeitos do painel Efeitos para clips, layers ou para a composição. Para controlar com o Companion, liga a entrada OSC em Definições → OSC e usa os mesmos endereços do Resolume."},
-        {"10. Gravar", "Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash."},
+        {"10. Timecode", "Em Definições → Timecode escolhe LTC (cabo de áudio) ou MTC (MIDI). Em cada clip, no painel Clip → Timecode, escolhe Seguir ou Disparar e a hora de início. O painel Timecode (menu Layout) mostra se o sinal está a chegar."},
+        {"11. Gravar", "Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash."},
     };
     for (auto& st : steps) {
         ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s", T(st.title));
@@ -240,6 +241,14 @@ void sectionWhatsNew() {
             "Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.",
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
+        }},
+        {"0.6.0", {
+            "TIMECODE SMPTE (como o Resolume): LTC pela entrada de som, MTC por MIDI ou gerador interno para testar. Definições → Timecode: fonte, canal, frame rate (automático ou fixo), offset e freewheel.",
+            "Cada clip tem modo de timecode: Seguir (a posição do vídeo vem do timecode), Disparar e seguir (entra no ar sozinho à hora marcada) ou Só disparar. Início em HH:MM:SS:FF ou botão Agora.",
+            "Painel Timecode (menu Layout): relógio grande, estado do sinal, nível de áudio do LTC, Play/Pausa do gerador e lista dos clips com timecode por ordem.",
+            "Clips com timecode mostram a etiqueta TC na grelha (azul = segue, laranja = dispara).",
+            "Botão Test pattern na barra de cima (atalho Ctrl+T): liga/desliga em todas as saídas.",
+            "Monitor de Programa só com o nome e o que ver; a transformação faz-se só no Preview.",
         }},
         {"0.5.2", {
             "Frequência das saídas: ao ligar uma saída, o monitor passa automaticamente para os fps do projeto (50 fps → 50 Hz, 25 → 50 Hz, 59.94 → 59 Hz) sem ir às definições do Windows. Fica assim ao desligar, até mudares os fps do projeto (Definições → Performance).",
@@ -467,9 +476,9 @@ void drawSettings(App& app) {
     if (!ImGui::Begin(title.c_str(), &app.ui.showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
     if (!g_listed) refreshLists();
 
-    const char* tabs[] = {"Geral", "Vídeo", "Áudio", "Rede", "OSC", "Performance", "Atalhos", "Atualizações", "Como usar", "Novidades", "Sobre"};
+    const char* tabs[] = {"Geral", "Vídeo", "Áudio", "Rede", "OSC", "Timecode", "Performance", "Atalhos", "Atualizações", "Como usar", "Novidades", "Sobre"};
     ImGui::BeginChild("nav", ImVec2(180, 0), ImGuiChildFlags_Borders);
-    for (int i = 0; i < 11; ++i) {
+    for (int i = 0; i < 12; ++i) {
         std::string l = std::string(T(tabs[i])) + "##tab" + std::to_string(i);
         if (ImGui::Selectable(l.c_str(), app.ui.settingsTab == i, 0, ImVec2(0, 26))) app.ui.settingsTab = i;
     }
@@ -484,11 +493,12 @@ void drawSettings(App& app) {
     case 2: sectionAudio(); break;
     case 3: sectionNetwork(); break;
     case 4: sectionOsc(app); break;
-    case 5: sectionPerformance(app); break;
-    case 6: sectionShortcuts(); break;
-    case 7: sectionUpdates(app); break;
-    case 8: sectionHowTo(); break;
-    case 9: sectionWhatsNew(); break;
+    case 5: sectionTimecode(app); break;
+    case 6: sectionPerformance(app); break;
+    case 7: sectionShortcuts(); break;
+    case 8: sectionUpdates(app); break;
+    case 9: sectionHowTo(); break;
+    case 10: sectionWhatsNew(); break;
     default: sectionAbout(); break;
     }
     ImGui::EndChild();

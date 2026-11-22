@@ -2,6 +2,7 @@
 #include "core/Log.h"
 #include "core/CrashHandler.h"
 #include "core/I18n.h"
+#include "core/Timecode.h"
 #include "core/Settings.h"
 #include "core/Updater.h"
 #include "core/Osc.h"
@@ -249,9 +250,7 @@ void App::runAction(int a) {
     case Action::OutputsOn:     setAllOutputs(true); break;
     case Action::OutputsOff:    setAllOutputs(false); break;
     case Action::StopAll:       comp.stopAll(project); break;
-    case Action::TestPattern:
-        if (Screen* s = project.findScreen(ui.selScreen)) { s->testPattern = !s->testPattern; dirty = true; }
-        break;
+    case Action::TestPattern:   toggleTestPattern(); break;
     case Action::Save:          saveOrSaveAs(); break;
     case Action::SaveAs:        saveAsDialog(); break;
     case Action::Open:          openDialog(); break;
@@ -330,6 +329,60 @@ void App::applyPerformance() {
     DWORD cls = s.priority >= 2 ? HIGH_PRIORITY_CLASS : s.priority == 1 ? ABOVE_NORMAL_PRIORITY_CLASS : NORMAL_PRIORITY_CLASS;
     SetPriorityClass(GetCurrentProcess(), cls);
     SetThreadExecutionState(s.preventSleep ? (ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED) : ES_CONTINUOUS);
+}
+
+void App::applyTimecode() {
+    const Settings& s = settings();
+    TcConfig c;
+    c.source = (TcSource)s.tcSource;
+    c.audioId = s.tcAudioId; c.channel = s.tcChannel; c.midiName = s.tcMidi;
+    c.fps = s.tcFps; c.offset = s.tcOffset; c.freewheel = s.tcFreewheel;
+    Timecode::get().configure(c);
+}
+
+// clips com "Disparar": entram no ar quando o timecode passa pela hora de início
+// (ou quando salta para dentro da duração do clip). Só a stack visível.
+void App::timecodeTriggers() {
+    static double prev = -1;
+    TcStatus st = Timecode::get().status();
+    if (!st.valid || !st.running) { prev = st.valid ? st.seconds : -1; return; }
+    const double t = st.seconds;
+    if (prev < 0) { prev = t; return; }
+    const bool jump = t < prev - 0.001 || t - prev > 0.5;
+    Project& p = project;
+    for (int li = 0; li < (int)p.comp.layers.size(); ++li) {
+        Layer& l = p.comp.layers[li];
+        int best = -1; double bestStart = -1;
+        for (int c = 0; c < (int)l.clips.size(); ++c) {
+            const Clip& cl = l.clips[c];
+            if (cl.empty() || !tcTriggers(cl.tcMode)) continue;
+            bool hit = false;
+            if (!jump) hit = prev < cl.tcStart && t >= cl.tcStart;
+            else {
+                double dur = 0;
+                auto th = ThumbnailCache::get().request(cl.path);
+                if (th->state == ThumbnailCache::Entry::State::Ready) dur = th->info.duration / std::max(0.01f, cl.speed);
+                hit = t >= cl.tcStart && t < cl.tcStart + (dur > 0 ? dur : 0.5);
+            }
+            if (hit && cl.tcStart >= bestStart) { best = c; bestStart = cl.tcStart; }   // o mais recente ganha
+        }
+        if (best >= 0 && !(l.activeColumn == best && l.playing)) {
+            comp.trigger(p, li, best);
+            PS_INFO("Timecode %s: %s → %s", tcFormat(t, st.fps).c_str(), l.name.c_str(), l.clips[best].name.c_str());
+        }
+    }
+    prev = t;
+}
+
+bool App::anyTestPattern() const {
+    for (auto& s : project.screens) if (s.testPattern) return true;
+    return false;
+}
+
+void App::toggleTestPattern() {
+    bool on = !anyTestPattern();
+    for (auto& s : project.screens) s.testPattern = on;
+    dirty = true;
 }
 
 void App::applyOsc() {
@@ -621,6 +674,7 @@ void App::frame() {
     if (m_needResize) resizeSwapchain();
 
     ThumbnailCache::get().poll();
+    timecodeTriggers();
     comp.update(project, now);
     comp.render(project);
     handleOsc();
@@ -724,6 +778,7 @@ int App::run(HINSTANCE inst) {
     newProject();
     loadUiState(*this);
     applyOsc();
+    applyTimecode();
     WebServer::get().configure(settings().webEnabled, settings().webPort);
 
     // recuperar trabalho depois de um crash
@@ -762,6 +817,7 @@ int App::run(HINSTANCE inst) {
     saveUiState(*this);
     updateMouseLock({}, m_hwnd);
     Osc::get().shutdown();
+    Timecode::get().shutdown();
     WebServer::get().shutdown();
     outputs.closeAll();
     comp.stopAll(project);

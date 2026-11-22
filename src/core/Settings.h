@@ -57,6 +57,15 @@ struct Settings {
     // link na rede (página Clip Time)
     bool        webEnabled = false;
     int         webPort = 8090;
+    // timecode SMPTE
+    int         tcSource = 0;             // 0 desligado, 1 LTC (áudio), 2 MTC (MIDI), 3 gerador interno
+    std::string tcAudioId;                // entrada de áudio (LTC)
+    std::string tcAudioName;
+    int         tcChannel = 0;            // 0 esquerdo, 1 direito
+    std::string tcMidi;                   // entrada MIDI (MTC)
+    float       tcFps = 0;                // 0 = automático
+    double      tcOffset = 0;             // segundos
+    int         tcFreewheel = 10;         // frames
     KeyBinding  keys[(int)Action::Count];
 
     void resetKeys();

@@ -28,6 +28,10 @@ struct Rect {
 enum class FitMode : int { Stretch = 0, Fit, Fill, Native };
 enum class BlendMode : int { Normal = 0, Add, Multiply, Screen };
 enum class LoopMode : int { Loop = 0, PlayOnceHold, PlayOnceClear };
+// timecode por clip (como o Resolume): seguir = posição vem do timecode; disparar = entra no ar à hora marcada
+enum class TcMode : int { Off = 0, Follow = 1, TriggerFollow = 2, TriggerOnly = 3 };
+inline bool tcFollows(TcMode m) { return m == TcMode::Follow || m == TcMode::TriggerFollow; }
+inline bool tcTriggers(TcMode m) { return m == TcMode::TriggerFollow || m == TcMode::TriggerOnly; }
 
 struct Clip {
     uint32_t    id = 0;
@@ -44,6 +48,8 @@ struct Clip {
     float       rotation = 0.0f;   // graus
     bool        flipH = false, flipV = false;
     std::vector<Effect> effects;
+    TcMode      tcMode = TcMode::Off;
+    double      tcStart = 0;       // segundos de timecode em que o clip começa
     bool empty() const { return path.empty(); }
 };
 

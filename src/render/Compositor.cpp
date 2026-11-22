@@ -1,4 +1,5 @@
 #include "render/Compositor.h"
+#include "core/Timecode.h"
 #include "core/Log.h"
 #include "core/Geometry.h"
 #include "core/Effects.h"
@@ -177,6 +178,7 @@ void Compositor::update(Project& p, double now) {
                 if (c.speed != m_prevClip.speed) m_prev->setSpeed(c.speed);
                 m_prevClip = c;
             }
+            if (tcFollows(m_prevClip.tcMode)) { TcStatus ts = Timecode::get().status(); if (ts.valid) m_prev->chase((ts.seconds - m_prevClip.tcStart) * m_prevClip.speed); }
             m_prev->update(now);
         }
     }
@@ -191,6 +193,10 @@ void Compositor::update(Project& p, double now) {
             if (c.speed != rt.curClip.speed && rt.cur) rt.cur->setSpeed(c.speed);
             if (c.loop != rt.curClip.loop && rt.cur) rt.cur->setLoop(c.loop);
             rt.curClip = c;
+        }
+        if (rt.cur && tcFollows(rt.curClip.tcMode)) {
+            TcStatus ts = Timecode::get().status();
+            if (ts.valid) rt.cur->chase((ts.seconds - rt.curClip.tcStart) * rt.curClip.speed);
         }
         if (rt.cur) rt.cur->update(now);
         if (rt.prev) rt.prev->update(now);

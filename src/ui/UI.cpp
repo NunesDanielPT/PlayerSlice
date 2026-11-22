@@ -30,6 +30,7 @@ static void buildDefaultLayout(ImGuiID dock) {
     ImGui::DockBuilderDockWindow("###effects", bl2);
     ImGui::DockBuilderDockWindow("###log", bl2);
     ImGui::DockBuilderDockWindow("###cliptime", bl2);
+    ImGui::DockBuilderDockWindow("###timecode", bl2);
     ImGui::DockBuilderDockWindow("###props_clip", rightTop);
     ImGui::DockBuilderDockWindow("###props_col", rightTop);
     ImGui::DockBuilderDockWindow("###props_layer", rightBottom);
@@ -197,7 +198,7 @@ static void monitorImage(App& app, bool prev, int mode, uint32_t id, ImVec2 avai
         const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
         ImVec2 imgMin; float sc = 0;
         if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, avail, &imgMin, &sc);
-        if (sc > 0 && app.ui.monitorGizmo) clipGizmo(app, prev, imgMin, sc, monId);
+        if (sc > 0 && prev && app.ui.monitorGizmo) clipGizmo(app, prev, imgMin, sc, monId);
     } else if (mode == 1) {
         const RenderTarget* rt = nullptr;
         if (prev) { app.comp.requestPreviewScreen(id); rt = app.comp.previewScreenRT(id); }
@@ -235,18 +236,11 @@ static void monitorPanel(App& app, bool prev, int& mode, uint32_t& id, const cha
         if (ImGui::Button(T("Limpar"))) app.comp.clearPreview();
         ImGui::EndDisabled();
         if (has) { ImGui::SameLine(); ImGui::TextDisabled("%s", app.comp.previewClipInfo().name.c_str()); }
-    } else {
-        int playing = 0;
-        for (auto& l : app.project.comp.layers) if (l.playing) playing++;
-        ImGui::TextDisabled(T("%d layer(s) no ar  ·  %dx%d"), playing, app.project.comp.width, app.project.comp.height);
-        ImGui::SameLine();
-        if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
     }
-    if (mode == 0) {
+    if (mode == 0 && prev) {
         ImGui::SameLine();
         ImGui::Checkbox((std::string(T("Transformar")) + "##" + cid).c_str(), &app.ui.monitorGizmo);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", prev ? T("Moldura para mover e esticar o clip em preview (Shift = proporção; duplo clique = tamanho nativo).")
-                                                                : T("Moldura para mover e esticar o clip no ar da layer selecionada (Shift = proporção; duplo clique = tamanho nativo)."));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Moldura para mover e esticar o clip em preview (Shift = proporção; duplo clique = tamanho nativo)."));
         ImGui::SameLine();
         if (ImGui::SmallButton((std::string(T("Janela grande")) + "##big" + cid).c_str())) { app.ui.showBigTransform = true; app.ui.bigPrev = prev; ImGui::SetWindowFocus("###bigtransform"); }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Abre uma janela grande para transformar com precisão."));
@@ -302,18 +296,13 @@ static void bigTransformWindow(App& app) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(500, 350), ImVec2(FLT_MAX, FLT_MAX));
     if (!ImGui::Begin((std::string(T("Transformar")) + "###bigtransform").c_str(), &app.ui.showBigTransform, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
     Project& p = app.project;
-    bool prev = app.ui.bigPrev;
-    ImGui::PushStyleColor(ImGuiCol_Button, prev ? ImVec4(0.75f, 0.52f, 0.1f, 1) : ImVec4(0.2f, 0.21f, 0.24f, 1));
-    if (ImGui::Button(T("PREVIEW"))) app.ui.bigPrev = true;
-    ImGui::PopStyleColor(); ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, !prev ? ImVec4(0.78f, 0.2f, 0.2f, 1) : ImVec4(0.2f, 0.21f, 0.24f, 1));
-    if (ImGui::Button(T("PROGRAMA"))) app.ui.bigPrev = false;
-    ImGui::PopStyleColor();
+    const bool prev = true;   // a transformação faz-se só no preview
+    ImGui::TextColored(ImVec4(0.95f, 0.67f, 0.16f, 1), "%s", T("PREVIEW"));
     int li, ci; VideoPlayer* v;
     bool has = gizmoTarget(app, prev, li, ci, v);
     ImGui::SameLine();
     if (has) ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s  ·  %s", p.comp.layers[li].name.c_str(), p.comp.layers[li].clips[ci].name.c_str());
-    else ImGui::TextDisabled("%s", prev ? T("Sem clip em preview (clica na metade de baixo de um clip).") : T("Nenhum clip no ar."));
+    else ImGui::TextDisabled("%s", T("Sem clip em preview (clica na metade de baixo de um clip)."));
     ImGui::SameLine();
     ImGui::TextDisabled("%s", T("  Arrasta = mover · cantos = esticar · Shift = proporção · duplo clique = repor"));
 
@@ -321,7 +310,7 @@ static void bigTransformWindow(App& app) {
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImGui::BeginChild("##bigimg", ImVec2(std::max(100.f, avail.x - sideW - 8), avail.y), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
     {
-        const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
+        const RenderTarget& rt = app.comp.previewRT();
         ImVec2 imgMin; float sc = 0;
         ImVec2 a = ImGui::GetContentRegionAvail();
         if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, a, &imgMin, &sc);
@@ -594,19 +583,32 @@ void drawUI(App& app) {
         }
         drawLayoutMenu(app);
         if (ImGui::BeginMenu(T("Ajuda"))) {
-            if (ImGui::MenuItem(T("Atalhos de teclado"))) openSettings(6);
-            if (ImGui::MenuItem(T("Como usar"))) openSettings(8);
+            if (ImGui::MenuItem(T("Atalhos de teclado"))) openSettings(7);
+            if (ImGui::MenuItem(T("Como usar"))) openSettings(10);
             if (ImGui::MenuItem(T("Novidades desta versão"))) openSettings(9);
             ImGui::Separator();
-            if (ImGui::MenuItem(T("Sobre o PLAYERSLICE"))) openSettings(10);
+            if (ImGui::MenuItem(T("Sobre o PLAYERSLICE"))) openSettings(11);
             ImGui::EndMenu();
         }
         // "Definições" abre logo a janela (sem submenu)
         if (ImGui::MenuItem(T("Definições"))) openSettings(app.ui.settingsTab);
 
+        // test pattern em todas as saídas (atalho configurável)
+        {
+            ImGui::SameLine(0, 24);
+            bool tp = app.anyTestPattern();
+            std::string k = bindingLabel(settings().keys[(int)Action::TestPattern]);
+            std::string lbl = std::string(T("Test pattern")) + (k.empty() ? "" : "  (" + k + ")") + "###tpbtn";
+            ImGui::PushStyleColor(ImGuiCol_Button, tp ? ImVec4(0.75f, 0.52f, 0.1f, 1) : ImVec4(0.2f, 0.21f, 0.24f, 1));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, tp ? ImVec4(0.85f, 0.6f, 0.15f, 1) : ImVec4(0.28f, 0.29f, 0.33f, 1));
+            if (ImGui::SmallButton(lbl.c_str())) app.toggleTestPattern();
+            ImGui::PopStyleColor(2);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Liga/desliga o test pattern animado em todas as saídas (para ver se há quebras de fps)."));
+        }
         // indicador à direita na barra de menus
         const char* st = app.anyLive() ? T("● NO AR") : T("○ saídas desligadas");
         float tw = ImGui::CalcTextSize(st).x;
+        ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetWindowWidth() - tw - 16);
         ImGui::TextColored(app.anyLive() ? ImVec4(1, 0.3f, 0.3f, 1) : ImVec4(0.55f, 0.55f, 0.58f, 1), "%s", st);
         ImGui::EndMainMenuBar();
@@ -650,6 +652,7 @@ void drawUI(App& app) {
     outputsMonitor(app);
     drawProperties(app);
     drawClipTime(app);
+    drawTimecodePanel(app);
     logWindow(app);
     statusBar(app);
     compSettingsPopup(app);

@@ -225,6 +225,7 @@ static json clipJ(const Clip& cl) {
         cj["fit"] = (int)cl.fit; cj["offset"] = {cl.offsetX, cl.offsetY}; cj["scale"] = cl.scale;
         cj["rotation"] = cl.rotation; cj["flipH"] = cl.flipH; cj["flipV"] = cl.flipV; cj["effects"] = fxJ(cl.effects);
         cj["stretch"] = {cl.scaleX, cl.scaleY};
+        if (cl.tcMode != TcMode::Off) { cj["tcMode"] = (int)cl.tcMode; cj["tcStart"] = cl.tcStart; }
     }
     return cj;
 }
@@ -319,6 +320,8 @@ static Clip clipFrom(const json& cj) {
         if (cj.contains("stretch") && cj["stretch"].size() == 2) { cl.scaleX = cj["stretch"][0]; cl.scaleY = cj["stretch"][1]; }
         if (!cj.contains("fit")) cl.fit = FitMode::Stretch;   // projetos muito antigos
         if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
+        int tm = 0; get(cj, "tcMode", tm); cl.tcMode = (TcMode)std::clamp(tm, 0, 3);
+        get(cj, "tcStart", cl.tcStart);
     }
     return cl;
 }

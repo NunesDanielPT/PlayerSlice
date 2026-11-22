@@ -27,7 +27,7 @@ static const char* kActionNames[] = {
     "Ligar todas as saídas",
     "Desligar todas as saídas",
     "Parar todos os clips",
-    "Test pattern (ecrã selecionado)",
+    "Test pattern (todas as saídas)",
     "Gravar",
     "Gravar como",
     "Abrir projeto",
@@ -123,6 +123,13 @@ bool Settings::load() {
         decodeBuffer = std::clamp(j.value("decodeBuffer", decodeBuffer), 3, 16);
         limitUiWhenLive = j.value("limitUiWhenLive", limitUiWhenLive);
         matchOutputHz = j.value("matchOutputHz", matchOutputHz);
+        tcSource = std::clamp(j.value("tcSource", tcSource), 0, 3);
+        tcAudioId = j.value("tcAudioId", tcAudioId); tcAudioName = j.value("tcAudioName", tcAudioName);
+        tcChannel = std::clamp(j.value("tcChannel", tcChannel), 0, 1);
+        tcMidi = j.value("tcMidi", tcMidi);
+        tcFps = j.value("tcFps", tcFps);
+        tcOffset = j.value("tcOffset", tcOffset);
+        tcFreewheel = std::clamp(j.value("tcFreewheel", tcFreewheel), 0, 100);
         oscIn = j.value("oscIn", oscIn); oscInPort = std::clamp(j.value("oscInPort", oscInPort), 1, 65535);
         oscOut = j.value("oscOut", oscOut); oscOutAddr = j.value("oscOutAddr", oscOutAddr);
         oscOutPort = std::clamp(j.value("oscOutPort", oscOutPort), 1, 65535);
@@ -154,6 +161,8 @@ bool Settings::save() const {
     j["outputsOffBlack"] = outputsOffBlack; j["startOutputsLive"] = startOutputsLive; j["lockMouseOutputs"] = lockMouseOutputs; j["checkUpdates"] = checkUpdates;
     j["priority"] = priority; j["preventSleep"] = preventSleep; j["hwDecode"] = hwDecode;
     j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive; j["matchOutputHz"] = matchOutputHz;
+    j["tcSource"] = tcSource; j["tcAudioId"] = tcAudioId; j["tcAudioName"] = tcAudioName; j["tcChannel"] = tcChannel;
+    j["tcMidi"] = tcMidi; j["tcFps"] = tcFps; j["tcOffset"] = tcOffset; j["tcFreewheel"] = tcFreewheel;
     j["oscIn"] = oscIn; j["oscInPort"] = oscInPort; j["oscOut"] = oscOut;
     j["oscOutAddr"] = oscOutAddr; j["oscOutPort"] = oscOutPort;
     j["webEnabled"] = webEnabled; j["webPort"] = webPort;
