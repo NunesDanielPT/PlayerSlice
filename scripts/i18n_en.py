@@ -1,6 +1,8 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Monitor de Preview: os botões passam para a linha de baixo quando o painel é estreito (sem ficarem cortados nem mais pequenos); textos mais curtos em painéis pequenos.':'Preview monitor: buttons wrap to the next line when the panel is narrow (no clipping, same size); shorter labels on small panels.',
+'Para programa':'To program',
 'Cue seguinte (GO)':'Next cue (GO)',
 'Cue anterior':'Previous cue',
 'Definições do clip copiadas':'Clip settings copied',

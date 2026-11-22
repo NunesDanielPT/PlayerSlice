@@ -245,6 +245,9 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.7.1", {
+            "Monitor de Preview: os botões passam para a linha de baixo quando o painel é estreito (sem ficarem cortados nem mais pequenos); textos mais curtos em painéis pequenos.",
+        }},
         {"0.7.0", {
             "Transporte do clip (como o Resolume): timeline com a cabeça de leitura, Trim In e Trim Out arrastáveis, saltar clicando na barra, Pausa/Play e Recomeçar.",
             "Copiar e colar definições de clip (Ctrl+Shift+C / Ctrl+Shift+V ou botão direito): repetição, velocidade, opacidade, encaixe, transformar, efeitos e modo de timecode — cola em vários clips de uma vez.",

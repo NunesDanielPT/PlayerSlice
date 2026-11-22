@@ -221,30 +221,59 @@ static void monitorImage(App& app, bool prev, int mode, uint32_t id, ImVec2 avai
     }
 }
 
+// coloca o próximo elemento na mesma linha se couber; senão passa para a linha seguinte
+static void flowNext(float w) {
+    ImGuiStyle& st = ImGui::GetStyle();
+    float limit = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+    if (ImGui::GetItemRectMax().x + st.ItemSpacing.x + w <= limit) ImGui::SameLine();
+}
+static float buttonW(const char* label) { return ImGui::CalcTextSize(label, nullptr, true).x + ImGui::GetStyle().FramePadding.x * 2; }
+static float checkW(const char* label) { return ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label, nullptr, true).x; }
+
 static void monitorPanel(App& app, bool prev, int& mode, uint32_t& id, const char* cid, ImVec2 size) {
     ImGui::BeginChild(cid, size, ImGuiChildFlags_Borders);
     ImVec4 tagCol = prev ? ImVec4(0.95f, 0.67f, 0.16f, 1) : ImVec4(0.92f, 0.25f, 0.25f, 1);
+    ImGui::AlignTextToFramePadding();
     ImGui::TextColored(tagCol, "%s", prev ? T("PREVIEW") : T("PROGRAMA"));
     ImGui::SameLine();
     std::string combo = std::string("##view") + cid;
     viewCombo(app, mode, id, combo.c_str());
     if (prev) {
+        const bool narrow = ImGui::GetContentRegionAvail().x < 430;   // textos curtos em painéis estreitos
         bool has = app.comp.hasPreview();
+        std::string key = bindingLabel(settings().keys[(int)Action::TakePreview]);
+        std::string take = narrow ? std::string(T("Para programa")) : std::string(T("Enviar para programa")) + "  (" + key + ")";
+        take += "##take";
         ImGui::BeginDisabled(!has);
-        std::string take = std::string(T("Enviar para programa")) + "  (" + bindingLabel(settings().keys[(int)Action::TakePreview]) + ")";
         if (ImGui::Button(take.c_str())) app.comp.takePreview(app.project);
-        ImGui::SameLine();
+        if (narrow && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s (%s)", T("Enviar para programa"), key.c_str());
+        flowNext(buttonW(T("Limpar")));
         if (ImGui::Button(T("Limpar"))) app.comp.clearPreview();
         ImGui::EndDisabled();
-        if (has) { ImGui::SameLine(); ImGui::TextDisabled("%s", app.comp.previewClipInfo().name.c_str()); }
-    }
-    if (mode == 0 && prev) {
-        ImGui::SameLine();
-        ImGui::Checkbox((std::string(T("Transformar")) + "##" + cid).c_str(), &app.ui.monitorGizmo);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Moldura para mover e esticar o clip em preview (Shift = proporção; duplo clique = tamanho nativo)."));
-        ImGui::SameLine();
-        if (ImGui::SmallButton((std::string(T("Janela grande")) + "##big" + cid).c_str())) { app.ui.showBigTransform = true; app.ui.bigPrev = prev; ImGui::SetWindowFocus("###bigtransform"); }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Abre uma janela grande para transformar com precisão."));
+        if (mode == 0) {
+            std::string tr = std::string(T("Transformar")) + "##" + cid;
+            flowNext(checkW(tr.c_str()));
+            ImGui::Checkbox(tr.c_str(), &app.ui.monitorGizmo);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Moldura para mover e esticar o clip em preview (Shift = proporção; duplo clique = tamanho nativo)."));
+            std::string big = std::string(T("Janela grande")) + "##big" + cid;
+            flowNext(buttonW(big.c_str()));
+            if (ImGui::Button(big.c_str())) { app.ui.showBigTransform = true; app.ui.bigPrev = prev; ImGui::SetWindowFocus("###bigtransform"); }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Abre uma janela grande para transformar com precisão."));
+        }
+        // nome do clip: no espaço que sobrar na linha (cortado), ou em baixo
+        if (has) {
+            const char* nm = app.comp.previewClipInfo().name.c_str();
+            float tw = ImGui::CalcTextSize(nm).x;
+            float limit = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+            float room = limit - (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x);
+            if (room >= std::min(tw, 80.f)) ImGui::SameLine();
+            ImGui::AlignTextToFramePadding();
+            ImVec2 c0 = ImGui::GetCursorScreenPos();
+            ImGui::PushClipRect(c0, ImVec2(limit, c0.y + ImGui::GetFrameHeight()), true);
+            ImGui::TextDisabled("%s", nm);
+            ImGui::PopClipRect();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", nm);
+        }
     }
     monitorImage(app, prev, mode, id, ImGui::GetContentRegionAvail(), cid);
     ImGui::EndChild();
