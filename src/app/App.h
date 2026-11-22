@@ -24,6 +24,10 @@ struct UIState {
     int      gridSize = 16;
     bool     showAbout = false;
     bool     showSettings = false;
+    int      viewMode[2] = {0, 0};    // monitores preview/programa: 0 composição, 1 ecrã, 2 slice
+    uint32_t viewId[2] = {0, 0};
+    int      editorBg = 0;           // fundo do editor: 0 programa, 1 preview, 2 nenhum
+    float    editorBgAlpha = 0.7f;
     int      settingsTab = 0;
     bool     showCompSettings = false;
     bool     showLog = false;

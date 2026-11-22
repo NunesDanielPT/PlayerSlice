@@ -45,6 +45,51 @@ void Compositor::trigger(Project& p, int li, int column) {
     l.activeColumn = column;
 }
 
+void Compositor::previewClip(Project& p, int li, int column) {
+    if (li < 0 || li >= (int)p.comp.layers.size()) return;
+    const Layer& l = p.comp.layers[li];
+    if (column < 0 || column >= (int)l.clips.size() || l.clips[column].empty()) return;
+    const Clip& c = l.clips[column];
+    if (m_prev && m_prevLayerId == l.id && m_prevCol == column && m_prevClip.path == c.path) { m_prev->restart(); return; }
+    VideoPlayer::destroyAsync(std::move(m_prev));
+    m_prev = std::make_unique<VideoPlayer>(c.path, c.loop == LoopMode::PlayOnceClear ? LoopMode::PlayOnceHold : c.loop, c.speed);
+    m_prevClip = c;
+    m_prevLayerId = l.id;
+    m_prevCol = column;
+}
+
+void Compositor::clearPreview() {
+    VideoPlayer::destroyAsync(std::move(m_prev));
+    m_prevLayerId = 0;
+    m_prevCol = -1;
+}
+
+void Compositor::takePreview(Project& p) {
+    if (!m_prev) return;
+    int li = p.layerIndex(m_prevLayerId);
+    if (li < 0) { clearPreview(); return; }
+    Layer& l = p.comp.layers[li];
+    LayerRuntime& rt = m_layers[l.id];
+    if (rt.prev) VideoPlayer::destroyAsync(std::move(rt.prev));
+    rt.prev = std::move(rt.cur);
+    rt.prevClip = rt.curClip;
+    // o player do preview passa para o programa: continua do mesmo frame, sem recarregar
+    m_prev->setLoop(m_prevClip.loop);
+    rt.cur = std::move(m_prev);
+    rt.curClip = m_prevClip;
+    rt.column = m_prevCol;
+    rt.fadeDur = l.fadeTime;
+    rt.fadeStart = -1;
+    l.activeColumn = m_prevCol;
+    m_prevLayerId = 0;
+    m_prevCol = -1;
+}
+
+const RenderTarget* Compositor::previewScreenRT(uint32_t id) const {
+    auto it = m_prevScreenRT.find(id);
+    return it == m_prevScreenRT.end() || !it->second.valid() ? nullptr : &it->second;
+}
+
 void Compositor::triggerColumn(Project& p, int column) {
     for (int i = 0; i < (int)p.comp.layers.size(); ++i) {
         Layer& l = p.comp.layers[i];
@@ -85,6 +130,11 @@ void Compositor::update(Project& p, double now) {
             VideoPlayer::destroyAsync(std::move(it->second.prev));
             it = m_layers.erase(it);
         } else ++it;
+    }
+
+    if (m_prev) {
+        if (!ids.count(m_prevLayerId)) clearPreview();
+        else m_prev->update(now);
     }
 
     for (auto& l : p.comp.layers) {
@@ -219,6 +269,19 @@ void Compositor::render(Project& p) {
         if (it != m_layers.end() && visible(l)) drawLayer(p, l, it->second, m_now);
     }
 
+    // 2b) preview: só o clip em preview, na região da sua layer
+    if (!m_prevRT.valid() || m_prevRT.w != cw || m_prevRT.h != ch) G.createRT(m_prevRT, cw, ch);
+    if (m_prevRT.valid()) {
+        G.setTarget(m_prevRT.rtv.Get(), cw, ch);
+        G.clear(m_prevRT.rtv.Get(), 0, 0, 0, 1);
+        int li = m_prev ? p.layerIndex(m_prevLayerId) : -1;
+        if (li >= 0) {
+            Layer l = p.comp.layers[li];
+            l.blend = BlendMode::Normal;
+            drawClip(p, l, m_prevClip, *m_prev, 1.f);
+        }
+    }
+
     // 3) cada ecrã num render target próprio (usado nas saídas e no editor)
     std::set<uint32_t> screens;
     for (auto& s : p.screens) {
@@ -230,6 +293,21 @@ void Compositor::render(Project& p) {
     }
     for (auto it = m_screenRT.begin(); it != m_screenRT.end();)
         it = screens.count(it->first) ? std::next(it) : m_screenRT.erase(it);
+
+    // 4) ecrãs vistos a partir do preview (só os pedidos pela interface no frame anterior)
+    m_prevScreenActive = std::move(m_prevScreenReq);
+    m_prevScreenReq.clear();
+    for (auto it = m_prevScreenRT.begin(); it != m_prevScreenRT.end();)
+        it = m_prevScreenActive.count(it->first) ? std::next(it) : m_prevScreenRT.erase(it);
+    for (uint32_t id : m_prevScreenActive) {
+        const Screen* s = nullptr;
+        for (auto& x : p.screens) if (x.id == id) s = &x;
+        if (!s) continue;
+        int w = std::clamp(s->width, 16, 16384), h = std::clamp(s->height, 16, 16384);
+        RenderTarget& rt = m_prevScreenRT[id];
+        if (!rt.valid() || rt.w != w || rt.h != h) if (!G.createRT(rt, w, h)) continue;
+        drawScreen(p, *s, rt.rtv.Get(), w, h, true);
+    }
 }
 
 static void unpackColor(uint32_t c, float out[4]) {
@@ -239,7 +317,7 @@ static void unpackColor(uint32_t c, float out[4]) {
     out[3] = 1.f;
 }
 
-void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTargetView* rtv, int w, int h) {
+void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTargetView* rtv, int w, int h, bool fromPreview) {
     Gfx& G = gfx();
     G.setTarget(rtv, w, h);
     G.clear(rtv, 0, 0, 0, 1);
@@ -277,7 +355,7 @@ void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTarge
             q.aspect = sl.outW / sl.outH;
         } else {
             q.ps = PSKind::RGBA;
-            q.srv0 = sourceFor(sl.sourceLayer);
+            q.srv0 = fromPreview ? m_prevRT.srv.Get() : sourceFor(sl.sourceLayer);
             // recorte com o mesmo tamanho e sem rotação → píxel perfeito
             q.pointSample = std::fabs(sl.input.w - sl.outW) < 0.01f && std::fabs(sl.input.h - sl.outH) < 0.01f &&
                             std::fmod(std::fabs(sl.rotation), 360.f) < 0.01f && sx == 1.f && sy == 1.f;
@@ -287,6 +365,9 @@ void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTarge
 }
 
 void Compositor::shutdown() {
+    m_prev.reset();
+    m_prevRT = {};
+    m_prevScreenRT.clear();
     for (auto& [id, rt] : m_layers) {
         rt.cur.reset();
         rt.prev.reset();

@@ -43,13 +43,115 @@ static void fitImage(ImTextureID tex, float tw, float th, ImVec2 avail) {
     ImGui::GetWindowDrawList()->AddRect(p0, p1, IM_COL32(70, 72, 78, 255));
 }
 
-static void compositionWindow(App& app) {
-    if (!ImGui::Begin(winTitle("Composição", "comp").c_str())) { ImGui::End(); return; }
-    const RenderTarget& rt = app.comp.compRT();
-    ImGui::TextDisabled("%dx%d", app.project.comp.width, app.project.comp.height);
+// ---------------------------------------------------------------------------
+// Monitores PREVIEW / PROGRAMA, cada um com "Ver": composição, um ecrã ou uma slice
+// ---------------------------------------------------------------------------
+static std::string viewLabel(App& app, int mode, uint32_t id) {
+    Project& p = app.project;
+    if (mode == 1) if (Screen* s = p.findScreen(id)) return std::string(T("Ecrã: ")) + s->name;
+    if (mode == 2) { Screen* owner = nullptr; if (Slice* sl = p.findSlice(id, &owner)) return std::string(T("Slice: ")) + owner->name + " / " + sl->name; }
+    return T("Composição");
+}
+
+static void viewCombo(App& app, int idx) {
+    Project& p = app.project;
+    int& mode = app.ui.viewMode[idx];
+    uint32_t& id = app.ui.viewId[idx];
+    // se o ecrã/slice foi apagado, voltar à composição
+    if ((mode == 1 && !p.findScreen(id)) || (mode == 2 && !p.findSlice(id))) { mode = 0; id = 0; }
+    ImGui::SetNextItemWidth(std::min(260.f, ImGui::GetContentRegionAvail().x));
+    std::string cur = viewLabel(app, mode, id);
+    std::string cid = std::string("##view") + std::to_string(idx);
+    if (ImGui::BeginCombo(cid.c_str(), cur.c_str())) {
+        if (ImGui::Selectable(T("Composição"), mode == 0)) { mode = 0; id = 0; }
+        if (!p.screens.empty()) ImGui::SeparatorText(T("Ecrãs (como saem nas saídas)"));
+        for (auto& s : p.screens) {
+            std::string l = s.name + "##vs" + std::to_string(s.id);
+            if (ImGui::Selectable(l.c_str(), mode == 1 && id == s.id)) { mode = 1; id = s.id; }
+        }
+        bool any = false;
+        for (auto& s : p.screens) if (!s.slices.empty()) any = true;
+        if (any) ImGui::SeparatorText(T("Slices (só o recorte)"));
+        for (auto& s : p.screens)
+            for (auto& sl : s.slices) {
+                std::string l = s.name + " / " + sl.name + "##vl" + std::to_string(sl.id);
+                if (ImGui::Selectable(l.c_str(), mode == 2 && id == sl.id)) { mode = 2; id = sl.id; }
+            }
+        ImGui::EndCombo();
+    }
+}
+
+// desenha o conteúdo do monitor idx (0 = preview, 1 = programa) na área dada
+static void monitorImage(App& app, int idx, ImVec2 avail) {
+    Project& p = app.project;
+    const int mode = app.ui.viewMode[idx];
+    const uint32_t id = app.ui.viewId[idx];
+    const bool prev = idx == 0;
+    if (mode == 0) {
+        const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
+        if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, avail);
+    } else if (mode == 1) {
+        const RenderTarget* rt = nullptr;
+        if (prev) { app.comp.requestPreviewScreen(id); rt = app.comp.previewScreenRT(id); }
+        else rt = app.comp.screenRT(id);
+        if (rt) fitImage(texId(rt->srv.Get()), (float)rt->w, (float)rt->h, avail);
+    } else if (Slice* sl = p.findSlice(id)) {
+        ID3D11ShaderResourceView* srv = prev ? app.comp.previewRT().srv.Get() : app.comp.programSource(sl->sourceLayer);
+        if (!srv || sl->input.w <= 0 || sl->input.h <= 0) return;
+        float cw = (float)p.comp.width, ch = (float)p.comp.height;
+        ImVec2 uv0(sl->input.x / cw, sl->input.y / ch), uv1((sl->input.x + sl->input.w) / cw, (sl->input.y + sl->input.h) / ch);
+        if (sl->flipH) std::swap(uv0.x, uv1.x);
+        if (sl->flipV) std::swap(uv0.y, uv1.y);
+        float s = std::min(avail.x / sl->input.w, avail.y / sl->input.h);
+        ImVec2 sz(sl->input.w * s, sl->input.h * s);
+        ImVec2 c = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos(ImVec2(c.x + (avail.x - sz.x) * 0.5f, c.y + (avail.y - sz.y) * 0.5f));
+        ImGui::Image(texId(srv), sz, uv0, uv1);
+        ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), sliceColorU32(sl->color, 255));
+    }
+}
+
+static void monitorPanel(App& app, int idx, ImVec2 size) {
+    ImGui::BeginChild(idx == 0 ? "##mon0" : "##mon1", size, ImGuiChildFlags_Borders);
+    ImVec4 tagCol = idx == 0 ? ImVec4(0.95f, 0.67f, 0.16f, 1) : ImVec4(0.92f, 0.25f, 0.25f, 1);
+    ImGui::TextColored(tagCol, "%s", idx == 0 ? T("PREVIEW") : T("PROGRAMA"));
     ImGui::SameLine();
-    if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
-    if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, ImGui::GetContentRegionAvail());
+    viewCombo(app, idx);
+    if (idx == 0) {
+        bool has = app.comp.hasPreview();
+        ImGui::BeginDisabled(!has);
+        std::string take = std::string(T("Enviar para programa")) + "  (" + bindingLabel(settings().keys[(int)Action::TakePreview]) + ")";
+        if (ImGui::Button(take.c_str())) app.comp.takePreview(app.project);
+        ImGui::SameLine();
+        if (ImGui::Button(T("Limpar"))) app.comp.clearPreview();
+        ImGui::EndDisabled();
+        if (has) { ImGui::SameLine(); ImGui::TextDisabled("%s", app.comp.previewClipInfo().name.c_str()); }
+    } else {
+        int playing = 0;
+        for (auto& l : app.project.comp.layers) if (l.activeColumn >= 0) playing++;
+        ImGui::TextDisabled(T("%d layer(s) no ar  ·  %dx%d"), playing, app.project.comp.width, app.project.comp.height);
+        ImGui::SameLine();
+        if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
+    }
+    monitorImage(app, idx, ImGui::GetContentRegionAvail());
+    ImGui::EndChild();
+}
+
+static void compositionWindow(App& app) {
+    if (!ImGui::Begin(winTitle("Preview / Programa", "comp").c_str())) { ImGui::End(); return; }
+    ImVec2 a = ImGui::GetContentRegionAvail();
+    bool sideBySide = a.x > a.y * 1.2f;
+    float sp = ImGui::GetStyle().ItemSpacing.x;
+    if (sideBySide) {
+        ImVec2 half((a.x - sp) * 0.5f, a.y);
+        monitorPanel(app, 0, half);
+        ImGui::SameLine();
+        monitorPanel(app, 1, half);
+    } else {
+        ImVec2 half(a.x, (a.y - sp) * 0.5f);
+        monitorPanel(app, 0, half);
+        monitorPanel(app, 1, half);
+    }
     ImGui::End();
 }
 

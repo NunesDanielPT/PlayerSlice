@@ -51,6 +51,17 @@ os vídeos do Explorador para essa layer.
 O fundo do editor mostra o vídeo real (composição na Entrada, saída na Saída) e o
 **Test pattern** desenha xadrez, círculo e diagonais em cada slice, na cor da slice.
 
+## Preview e Programa
+
+* Clicar na **metade de cima** de um clip põe-no no **Programa** (no ar).
+* Clicar na **metade de baixo** põe-no em **Preview** (não vai para as saídas).
+* Clicar no **cabeçalho de uma coluna** põe a coluna inteira no ar.
+* **Enter** (ou "Enviar para programa") passa o preview para o ar sem recomeçar o vídeo.
+* Os monitores Preview e Programa têm o seletor **Ver**: composição inteira,
+  um ecrã (exatamente como sai na saída, com todas as slices) ou só uma slice.
+* No editor de Saídas e Slices o fundo pode mostrar o **Programa**, o **Preview**
+  ou nada, com opacidade ajustável — para desenhar as slices por cima do vídeo.
+
 ## Saídas: ligar e desligar
 
 * Cada ecrã tem a opção **"No atalho"**. **F12** liga/desliga os ecrãs marcados
@@ -68,6 +79,7 @@ Atalhos de teclado (todos editáveis) · Atualizações · Sobre.
 |---|---|
 | F12 / Ctrl+F12 / Shift+F12 | Ligar-desligar saídas marcadas / ligar todas / desligar todas |
 | F1 … F9 | Disparar coluna 1 … 9 |
+| Enter / Ctrl+Backspace | Enviar preview para programa / limpar preview |
 | Shift+Esc | Parar todos os clips |
 | Ctrl+T | Test pattern do ecrã selecionado |
 | Ctrl+E | Editor de saídas e slices |

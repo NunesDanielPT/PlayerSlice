@@ -124,12 +124,18 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
     app.ui.cells.push_back({li, ci, p0.x, p0.y, p1.x, p1.y});
 
     bool active = l.activeColumn == ci && !c.empty();
+    bool inPreview = !c.empty() && app.comp.previewLayerId() == l.id && app.comp.previewColumn() == ci;
     bool sel = app.ui.selLayer == li && app.ui.selColumn == ci;
     ImGui::InvisibleButton("##cell", ImVec2(cellW, cellH), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
     bool hovered = ImGui::IsItemHovered();
+    // metade de cima → PROGRAMA (no ar) · metade de baixo → PREVIEW
+    bool topHalf = ImGui::GetIO().MousePos.y < p0.y + cellH * 0.5f;
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         app.ui.selLayer = li; app.ui.selColumn = ci;
-        if (!c.empty()) app.comp.trigger(p, li, ci);
+        if (!c.empty()) {
+            if (topHalf) app.comp.trigger(p, li, ci);
+            else app.comp.previewClip(p, li, ci);
+        }
     }
     if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && c.empty()) {
         auto files = app.pickVideoFiles();
@@ -171,8 +177,21 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
     } else {
         dl->AddText(ImVec2(p0.x + cellW * 0.5f - 4, p0.y + cellH * 0.5f - 8), IM_COL32(70, 72, 78, 255), "+");
     }
-    ImU32 border = active ? col::Playing : sel ? col::Accent : hovered ? IM_COL32(90, 94, 100, 255) : IM_COL32(48, 50, 55, 255);
-    dl->AddRect(p0, p1, border, 3, 0, active || sel ? 2.f : 1.f);
+    // indicação das duas zonas ao passar o rato
+    if (hovered && !c.empty() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        float mid = p0.y + cellH * 0.5f;
+        ImVec2 z0 = topHalf ? p0 : ImVec2(p0.x, mid), z1 = topHalf ? ImVec2(p1.x, mid) : p1;
+        dl->AddRectFilled(z0, z1, topHalf ? IM_COL32(220, 50, 50, 70) : IM_COL32(240, 170, 40, 70), 3);
+        const char* t = topHalf ? T("▲ PROGRAMA") : T("▼ PREVIEW");
+        ImVec2 ts = ImGui::CalcTextSize(t);
+        ImVec2 tp(p0.x + (cellW - ts.x) * 0.5f, (z0.y + z1.y) * 0.5f - ts.y * 0.5f);
+        dl->AddRectFilled(ImVec2(tp.x - 4, tp.y - 1), ImVec2(tp.x + ts.x + 4, tp.y + ts.y + 1), IM_COL32(0, 0, 0, 190), 2);
+        dl->AddText(tp, IM_COL32(255, 255, 255, 255), t);
+        dl->AddLine(ImVec2(p0.x + 4, mid), ImVec2(p1.x - 4, mid), IM_COL32(255, 255, 255, 60));
+    }
+    ImU32 border = active ? col::Playing : inPreview ? IM_COL32(240, 170, 40, 255) : sel ? col::Accent : hovered ? IM_COL32(90, 94, 100, 255) : IM_COL32(48, 50, 55, 255);
+    dl->AddRect(p0, p1, border, 3, 0, active || sel || inPreview ? 2.f : 1.f);
+    if (inPreview) dl->AddText(ImVec2(p0.x + 5, p0.y + 3), IM_COL32(240, 170, 40, 255), "PV");
 
     // arrastar clips entre células (Ctrl = copiar)
     if (!c.empty() && ImGui::BeginDragDropSource()) {
@@ -200,7 +219,8 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
             auto files = app.pickVideoFiles();
             if (!files.empty()) { app.checkpoint(); for (size_t i = 0; i < files.size(); ++i) assignClip(app, li, ci + (int)i, files[i]); }
         }
-        if (ImGui::MenuItem(T("Tocar"), nullptr, false, !c.empty())) app.comp.trigger(p, li, ci);
+        if (ImGui::MenuItem(T("Pôr no programa"), nullptr, false, !c.empty())) app.comp.trigger(p, li, ci);
+        if (ImGui::MenuItem(T("Pôr em preview"), nullptr, false, !c.empty())) app.comp.previewClip(p, li, ci);
         if (ImGui::MenuItem(T("Remover clip"), nullptr, false, !c.empty())) {
             app.checkpoint();
             if (l.activeColumn == ci) app.comp.stopLayer(p, li);
@@ -240,7 +260,7 @@ void drawClipGrid(App& app) {
     if (ImGui::Button(T("Parar tudo"))) app.comp.stopAll(p);
     ImGui::PopStyleColor();
     ImGui::SameLine();
-    ImGui::TextDisabled(T("  Arrasta vídeos do Explorador para as células · Ctrl+arrastar copia"));
+    ImGui::TextDisabled("%s", T("  Clique: metade de cima = programa · metade de baixo = preview · cabeçalho = coluna inteira no ar"));
 
     const float headerW = 210, cellW = 132, cellH = 84;
     const int ncols = (int)p.comp.columns.size();

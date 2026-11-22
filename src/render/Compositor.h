@@ -4,6 +4,7 @@
 #include "video/VideoPlayer.h"
 #include <map>
 #include <memory>
+#include <set>
 
 namespace ps {
 
@@ -23,6 +24,21 @@ public:
     void stopAll(Project& p);
     void restartLayer(int layerIndex, Project& p);
 
+    // PREVIEW: um clip à parte, fora das saídas, para ver antes de pôr no ar
+    void previewClip(Project& p, int layerIndex, int column);
+    void clearPreview();
+    void takePreview(Project& p);              // passa o preview para o programa (sem recomeçar)
+    bool hasPreview() const { return m_prev != nullptr; }
+    uint32_t previewLayerId() const { return m_prevLayerId; }
+    int previewColumn() const { return m_prevCol; }
+    const Clip& previewClipInfo() const { return m_prevClip; }
+    VideoPlayer* previewPlayer() const { return m_prev.get(); }
+    const RenderTarget& previewRT() const { return m_prevRT; }
+    // ecrãs vistos a partir do preview (renderizados a pedido da interface)
+    void requestPreviewScreen(uint32_t screenId) { m_prevScreenReq.insert(screenId); }
+    const RenderTarget* previewScreenRT(uint32_t screenId) const;
+    ID3D11ShaderResourceView* programSource(uint32_t layerId) const { return sourceFor(layerId); }
+
     // thread de render, uma vez por frame
     void update(Project& p, double now);
     void render(Project& p);
@@ -33,7 +49,7 @@ public:
     VideoPlayer* activePlayer(uint32_t layerId);
 
     // desenha um ecrã (todas as slices) num alvo qualquer
-    void drawScreen(const Project& p, const Screen& s, ID3D11RenderTargetView* rtv, int w, int h);
+    void drawScreen(const Project& p, const Screen& s, ID3D11RenderTargetView* rtv, int w, int h, bool fromPreview = false);
 
     void shutdown();
 
@@ -47,6 +63,14 @@ private:
     std::map<uint32_t, RenderTarget> m_screenRT;
     std::map<uint32_t, LayerRuntime> m_layers;
     double m_now = 0;
+
+    std::unique_ptr<VideoPlayer> m_prev;
+    Clip     m_prevClip;
+    uint32_t m_prevLayerId = 0;
+    int      m_prevCol = -1;
+    RenderTarget m_prevRT;
+    std::map<uint32_t, RenderTarget> m_prevScreenRT;
+    std::set<uint32_t> m_prevScreenReq, m_prevScreenActive;
 };
 
 } // namespace ps

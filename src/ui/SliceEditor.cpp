@@ -366,13 +366,21 @@ void canvas(App& app, Screen& sc) {
     }
     View v{ImVec2(c0.x + (avail.x - cw * zoom) * 0.5f + pan[0], c0.y + (avail.y - ch * zoom) * 0.5f + pan[1]), zoom};
 
-    // fundo: imagem real (composição ou saída) para veres o conteúdo
+    // fundo: o vídeo real (programa = o que está no ar, ou preview) para desenhar as slices por cima
     ImVec2 a0 = v.toScreen(ImVec2(0, 0)), a1 = v.toScreen(ImVec2(cw, ch));
     dl->AddRectFilled(a0, a1, IM_COL32(0, 0, 0, 255));
-    if (tab == 0) {
-        if (app.comp.compRT().valid()) dl->AddImage(texId(app.comp.compRT().srv.Get()), a0, a1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 150));
-    } else if (const RenderTarget* rt = app.comp.screenRT(sc.id)) {
-        dl->AddImage(texId(rt->srv.Get()), a0, a1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, 170));
+    const int bgAlpha = (int)(std::clamp(app.ui.editorBgAlpha, 0.f, 1.f) * 255);
+    if (app.ui.editorBg != 2) {
+        const bool prev = app.ui.editorBg == 1;
+        if (tab == 0) {
+            const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
+            if (rt.valid()) dl->AddImage(texId(rt.srv.Get()), a0, a1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, bgAlpha));
+        } else {
+            const RenderTarget* rt = nullptr;
+            if (prev) { app.comp.requestPreviewScreen(sc.id); rt = app.comp.previewScreenRT(sc.id); }
+            else rt = app.comp.screenRT(sc.id);
+            if (rt) dl->AddImage(texId(rt->srv.Get()), a0, a1, ImVec2(0, 0), ImVec2(1, 1), IM_COL32(255, 255, 255, bgAlpha));
+        }
     }
     if (app.ui.showGrid && zoom * app.ui.gridSize >= 6) {
         float g = (float)app.ui.gridSize;
@@ -685,6 +693,20 @@ void drawSliceEditor(App& app) {
     if (ImGui::Button(T("Ajustar"))) app.ui.zoom[tab] = 0;
     ImGui::SameLine();
     if (ImGui::Button("100%")) { app.ui.zoom[tab] = 1; app.ui.pan[tab][0] = app.ui.pan[tab][1] = 0; }
+    ImGui::SameLine();
+    {
+        const char* bgs[] = {T("Programa (no ar)"), T("Preview"), T("Nenhum")};
+        ImGui::TextUnformatted(T("Fundo:"));
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(130);
+        ImGui::Combo("##bg", &app.ui.editorBg, bgs, 3);
+        if (app.ui.editorBg != 2) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80);
+            ImGui::SliderFloat("##bga", &app.ui.editorBgAlpha, 0.1f, 1.f, "%.2f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Opacidade do vídeo de fundo"));
+        }
+    }
     ImGui::SameLine();
     ImGui::Checkbox(T("Snap"), &app.ui.snap);
     ImGui::SameLine();

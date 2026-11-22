@@ -44,6 +44,12 @@ static void generate(const std::string& path, ThumbnailCache::Entry& e) {
         if (avcodec_open2(dec, c, nullptr) < 0) break;
         pkt = av_packet_alloc();
         fr = av_frame_alloc();
+        // o 1º frame costuma ser preto (fade in): saltar para ~10% do vídeo, no máximo 3 s
+        if (e.info.duration > 0.5) {
+            double t = std::min(3.0, e.info.duration * 0.1);
+            int64_t ts = (int64_t)(t / av_q2d(st->time_base)) + (st->start_time != AV_NOPTS_VALUE ? st->start_time : 0);
+            if (av_seek_frame(fmt, vs, ts, AVSEEK_FLAG_BACKWARD) >= 0) avcodec_flush_buffers(dec);
+        }
         bool got = false;
         for (int tries = 0; tries < 300 && !got; ++tries) {
             int r = av_read_frame(fmt, pkt);

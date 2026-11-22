@@ -53,6 +53,7 @@ static bool writeFileAtomic(const std::wstring& path, const std::string& data) {
 
 void App::newProject() {
     comp.stopAll(project);
+    comp.clearPreview();
     liveScreens.clear();
     project = Project::makeDefault();
     projectPath.clear();
@@ -68,6 +69,7 @@ bool App::openProject(const std::wstring& path) {
     Project p;
     if (!p.fromJson(text, &err)) { PS_ERROR("Projeto inválido: %s", err.c_str()); return false; }
     comp.stopAll(project);
+    comp.clearPreview();
     liveScreens.clear();
     project = std::move(p);
     projectPath = path;
@@ -183,6 +185,8 @@ void App::runAction(int a) {
     case Action::Redo:          redo(); break;
     case Action::Settings:      ui.showSettings = true; break;
     case Action::OutputEditor:  ui.focusEditor = true; break;
+    case Action::TakePreview:   comp.takePreview(project); break;
+    case Action::ClearPreview:  comp.clearPreview(); break;
     default:
         if (a >= (int)Action::Column1 && a <= (int)Action::Column9) comp.triggerColumn(project, a - (int)Action::Column1);
         break;
@@ -406,7 +410,7 @@ int App::run(HINSTANCE inst) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     static std::string iniPath = toUtf8(dir + L"\\layout.ini");
     io.IniFilename = iniPath.c_str();
     ImGui_ImplWin32_Init(m_hwnd);

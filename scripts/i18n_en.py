@@ -89,6 +89,14 @@ EN = {
 'Monitor de saídas':'Output monitor','Propriedades':'Properties','Definições da composição':'Composition settings','Registo':'Log',
 'Parar todos os clips':'Stop all clips','Test pattern (ecrã selecionado)':'Test pattern (selected screen)','Gravar como':'Save as',
 'Abrir projeto':'Open project','Geral':'General',
+'Enviar preview para programa':'Send preview to program','Limpar preview':'Clear preview',
+'▲ PROGRAMA':'▲ PROGRAM','▼ PREVIEW':'▼ PREVIEW','Pôr no programa':'Put on program','Pôr em preview':'Put in preview',
+'  Clique: metade de cima = programa · metade de baixo = preview · cabeçalho = coluna inteira no ar':'  Click: top half = program · bottom half = preview · header = whole column live',
+'Programa (no ar)':'Program (live)','Preview':'Preview','Nenhum':'None','Fundo:':'Background:',
+'Opacidade do vídeo de fundo':'Background video opacity','Ecrã: ':'Screen: ','Slice: ':'Slice: ',
+'Ecrãs (como saem nas saídas)':'Screens (as sent to the outputs)','Slices (só o recorte)':'Slices (crop only)',
+'PREVIEW':'PREVIEW','PROGRAMA':'PROGRAM','Enviar para programa':'Send to program','Limpar':'Clear',
+'%d layer(s) no ar  ·  %dx%d':'%d layer(s) live  ·  %dx%d','Preview / Programa':'Preview / Program',
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
 

@@ -34,6 +34,8 @@ static const char* kActionNames[] = {
     "Refazer",
     "Definições",
     "Editor de saídas e slices",
+    "Enviar preview para programa",
+    "Limpar preview",
     "Disparar coluna 1", "Disparar coluna 2", "Disparar coluna 3", "Disparar coluna 4", "Disparar coluna 5",
     "Disparar coluna 6", "Disparar coluna 7", "Disparar coluna 8", "Disparar coluna 9",
 };
@@ -42,7 +44,7 @@ static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (int)Action::Cou
 // chave estável no settings.json
 static const char* kActionIds[] = {
     "toggleOutputs", "outputsOn", "outputsOff", "stopAll", "testPattern", "save", "saveAs", "open",
-    "undo", "redo", "settings", "outputEditor",
+    "undo", "redo", "settings", "outputEditor", "takePreview", "clearPreview",
     "column1", "column2", "column3", "column4", "column5", "column6", "column7", "column8", "column9",
 };
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == (int)Action::Count, "ids das ações");
@@ -63,6 +65,8 @@ void Settings::resetKeys() {
     keys[(int)Action::Redo]          = k(ImGuiKey_Y, true);
     keys[(int)Action::Settings]      = k(ImGuiKey_Comma, true);
     keys[(int)Action::OutputEditor]  = k(ImGuiKey_E, true);
+    keys[(int)Action::TakePreview]   = k(ImGuiKey_Enter);
+    keys[(int)Action::ClearPreview]  = k(ImGuiKey_Backspace, true);
     for (int i = 0; i < 9; ++i) keys[(int)Action::Column1 + i] = k(ImGuiKey_F1 + i);
 }
 
