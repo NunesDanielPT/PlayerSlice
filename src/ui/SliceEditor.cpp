@@ -108,14 +108,14 @@ float snapDelta(const std::vector<float>& vals, const std::vector<float>& target
     return delta;
 }
 
-void label(ImDrawList* dl, ImVec2 center, const char* name, const char* dims, float rot, bool small) {
+void label(ImDrawList* dl, ImVec2 center, const char* name, const char* dims, float rot, bool compact) {
     ImVec2 ts1 = ImGui::CalcTextSize(name), ts2 = ImGui::CalcTextSize(dims);
-    float w = std::max(ts1.x, ts2.x) + 10, h = small ? ts1.y + 6 : ts1.y + ts2.y + 8;
+    float w = std::max(ts1.x, ts2.x) + 10, h = compact ? ts1.y + 6 : ts1.y + ts2.y + 8;
     (void)rot;
     ImVec2 p0(center.x - w * 0.5f, center.y - h * 0.5f);
     dl->AddRectFilled(p0, ImVec2(p0.x + w, p0.y + h), IM_COL32(0, 0, 0, 200), 2);
     dl->AddText(ImVec2(center.x - ts1.x * 0.5f, p0.y + 3), IM_COL32(255, 255, 255, 255), name);
-    if (!small) dl->AddText(ImVec2(center.x - ts2.x * 0.5f, p0.y + 5 + ts1.y), IM_COL32(220, 220, 220, 255), dims);
+    if (!compact) dl->AddText(ImVec2(center.x - ts2.x * 0.5f, p0.y + 5 + ts1.y), IM_COL32(220, 220, 220, 255), dims);
 }
 
 Screen* selectedScreen(App& app) {
@@ -570,8 +570,8 @@ void canvas(App& app, Screen& sc) {
         dl->AddQuad(q[0], q[1], q[2], q[3], sel ? IM_COL32(255, 255, 255, 255) : sliceColorU32(s.color, 255), sel ? 2.f : 1.f);
         ImVec2 cen((q[0].x + q[2].x) * 0.5f, (q[0].y + q[2].y) * 0.5f);
         snprintf(dims, sizeof(dims), "%.0f,%.0f // %.0f x %.0f%s", r.x, r.y, r.w, r.h, std::fabs(r.rot) > 0.01f ? "  ⟳" : "");
-        bool small = std::fabs(q[2].y - q[0].y) < 40 && std::fabs(q[2].x - q[0].x) < 140;
-        label(dl, cen, s.name.c_str(), dims, r.rot, small);
+        bool compact = std::fabs(q[2].y - q[0].y) < 40 && std::fabs(q[2].x - q[0].x) < 140;
+        label(dl, cen, s.name.c_str(), dims, r.rot, compact);
     }
     // pegas da selecionada
     if (selected) {
