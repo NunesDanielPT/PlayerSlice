@@ -45,6 +45,12 @@ struct Settings {
     bool        hwDecode = true;          // descodificação H.264/H.265 pela placa gráfica
     int         decodeBuffer = 6;         // frames em fila por clip (3..16)
     bool        limitUiWhenLive = true;   // interface a 30 fps com saídas no ar (mais GPU para as saídas)
+    // OSC (Companion, TouchOSC...)
+    bool        oscIn = false;
+    int         oscInPort = 7000;
+    bool        oscOut = false;
+    std::string oscOutAddr = "127.0.0.1";
+    int         oscOutPort = 7001;
     KeyBinding  keys[(int)Action::Count];
 
     void resetKeys();

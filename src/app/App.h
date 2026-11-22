@@ -6,6 +6,7 @@
 #include "render/OutputWindows.h"
 #include <deque>
 #include <set>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -36,7 +37,26 @@ struct UIState {
     bool     editPoints = false;      // editor: modo Editar pontos
     bool     handTool = false;        // editor: ferramenta mão
     bool     layoutBuilt = false;
+    // seleção múltipla de clips (id da layer, coluna) + âncora para Shift+clique
+    std::set<std::pair<uint32_t, int>> selCells;
+    int      anchorLayer = -1, anchorCol = -1;
+    int      selColumnProp = 0;               // coluna mostrada nas propriedades
+    struct ClipCopy { int dl, dc; Clip clip; };
+    std::vector<ClipCopy> clipboard;          // Ctrl+C / Ctrl+V
+    std::vector<Effect> fxClipboard;          // copiar/colar efeitos
+    uint32_t renameLayer = 0;                 // layer a ser renomeada (0 = nenhuma)
+    int      renameColumn = -1;
     struct CellRect { int layer, column; float x0, y0, x1, y1; };
+    // painéis visíveis (menu Layout)
+    struct Panels {
+        bool clips = true, monitors = true, outputs = true, log = true, effects = true;
+        bool propComp = true, propLayer = true, propColumn = true, propClip = true;
+    } panel;
+    // monitores extra (menu Layout → + monitor)
+    struct ExtraMonitor { uint32_t id; bool preview; int mode = 0; uint32_t viewId = 0; bool open = true; };
+    std::vector<ExtraMonitor> extraMonitors;
+    uint32_t nextMonitorId = 1;
+    std::string pendingLayout;     // layout a carregar no início do próximo frame
     std::vector<CellRect> cells;     // para largar ficheiros do Explorador
 };
 
@@ -64,6 +84,7 @@ public:
     void runAction(int action);    // Action (Settings.h)
     void applyLanguage();
     void applyPerformance();
+    void applyOsc();
 
     // ficheiros
     void newProject();
@@ -111,6 +132,9 @@ private:
     double m_lastFrame = 0;
     double m_lastUi = 0;
     std::deque<std::string> m_undo, m_redo;
+    void handleOsc();
+    std::vector<int> m_oscSentColumn;     // feedback: coluna ativa já enviada por layer
+    int m_oscSentLive = -1;
 };
 
 } // namespace ps

@@ -62,6 +62,26 @@ O fundo do editor mostra o vídeo real (composição na Entrada, saída na Saíd
 * No editor de Saídas e Slices o fundo pode mostrar o **Programa**, o **Preview**
   ou nada, com opacidade ajustável — para desenhar as slices por cima do vídeo.
 
+## Efeitos, propriedades e layouts
+
+* **Efeitos** (no clip, na layer ou na composição): Cor, Inverter, Tingir, Preto e
+  branco, Limiar, Espelho, Pixelizar, Separação RGB, Vinheta, Strobe — arrastar do
+  painel **Efeitos**.
+* Painéis de propriedades **Composição · Layer · Coluna · Clip**.
+* Layers e colunas com **cores**, menus completos e colunas **arrastáveis**.
+* **Ctrl/Shift+clique** para selecionar vários clips; **Ctrl+C / Ctrl+V / Ctrl+X / Del**.
+* Menu **Layout**: painéis, monitores extra de programa/preview, gravar/carregar layouts.
+
+## OSC (Companion)
+
+Definições → OSC. Endereços iguais aos do Resolume (layer 1 = a de baixo):
+`/composition/columns/N/connect`, `/composition/layers/L/clips/C/connect`,
+`/composition/layers/L/clips/C/select` (preview), `/composition/layers/L/clear`,
+`/composition/disconnectall`, `/composition/layers/L/video/opacity`,
+`/composition/video/opacity`, e ainda `/playerslice/outputs/toggle|on|off`,
+`/playerslice/screens/N/output`, `/playerslice/preview/take|clear`.
+Feedback: `/composition/layers/L/clips/C/connected 0/1`, `/playerslice/outputs/live 0/1`.
+
 ## Saídas: ligar e desligar
 
 * Cada ecrã tem a opção **"No atalho"**. **F12** liga/desliga os ecrãs marcados

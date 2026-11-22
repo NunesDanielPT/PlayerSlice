@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <functional>
 
 namespace ps {
 
@@ -23,6 +24,8 @@ public:
     void stopLayer(Project& p, int layerIndex);
     void stopAll(Project& p);
     void restartLayer(int layerIndex, Project& p);
+    // colunas movidas/apagadas/inseridas: map(antiga) = nova, ou -1 se foi apagada
+    void remapColumns(Project& p, const std::function<int(int)>& map);
 
     // PREVIEW: um clip à parte, fora das saídas, para ver antes de pôr no ar
     void previewClip(Project& p, int layerIndex, int column);
@@ -58,7 +61,8 @@ private:
     void drawClip(const Project& p, const Layer& l, const Clip& c, VideoPlayer& v, float opacity);
     ID3D11ShaderResourceView* sourceFor(uint32_t layerId) const;
 
-    RenderTarget m_comp;
+    RenderTarget m_comp, m_compRaw;
+    DXGI_FORMAT  m_compFmt = DXGI_FORMAT_UNKNOWN;
     std::map<uint32_t, RenderTarget> m_layerRT;     // layers usadas como fonte de slices
     std::map<uint32_t, RenderTarget> m_screenRT;
     std::map<uint32_t, LayerRuntime> m_layers;

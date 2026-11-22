@@ -187,6 +187,52 @@ EN = {
 'Correção: arrastar vídeos do Explorador para a grelha não funcionava quando a app abria como administrador (depois de instalar/atualizar).':'Fix: dragging videos from Explorer onto the grid did not work when the app was started as administrator (after installing/updating).',
 'Largar vídeos ou clips em cima do nome de uma layer põe-nos na primeira célula livre dessa layer.':'Dropping videos or clips onto a layer name puts them in the first free cell of that layer.',
 'Saída avançada...':'Advanced output...',
+'Brilho, contraste, saturação e matiz.':'Brightness, contrast, saturation and hue.','Saturação':'Saturation','Matiz':'Hue',
+'Inverter':'Invert','Inverte as cores (negativo).':'Inverts the colors (negative).','Quantidade':'Amount',
+'Tingir':'Tint','Pinta a imagem com uma cor, mantendo a luminosidade.':'Colors the image with one color, keeping its brightness.','G':'G','B':'B',
+'Preto e branco':'Black & white','Remove a cor.':'Removes the color.','Limiar':'Threshold',
+'Só preto e branco puros, a partir de um nível de luz.':'Pure black and white only, from a light level.','Nível':'Level',
+'Espelho':'Mirror','Espelha metade da imagem para o outro lado.':'Mirrors half of the image to the other side.','Horizontal':'Horizontal','Vertical':'Vertical',
+'Pixelizar':'Pixelate','Blocos grandes de píxeis (mosaico).':'Large pixel blocks (mosaic).','Tamanho (px)':'Size (px)',
+'Separação RGB':'RGB split','Desloca os canais vermelho e azul (efeito glitch).':'Shifts the red and blue channels (glitch effect).','Distância (px)':'Distance (px)',
+'Vinheta':'Vignette','Escurece os cantos.':'Darkens the corners.','Strobe':'Strobe','Pisca a imagem ligada/desligada.':'Flashes the image on/off.',
+'Velocidade (Hz)':'Speed (Hz)','Ligado (%)':'On (%)','Coluna ':'Column ','Nova layer':'New layer','Inserir acima':'Insert above','Inserir abaixo':'Insert below',
+'Renomear':'Rename','Copiar efeitos':'Copy effects','Colar efeitos':'Paste effects','Limpar clips':'Clear clips',
+'Ignorar disparo de coluna':'Ignore column trigger','Bloquear conteúdo':'Lock content','bloqueada':'locked','sem coluna':'no column',
+'%s  ·  fade %.1fs  ·  %d efeito(s)':'%s  ·  fade %.1fs  ·  %d effect(s)','Copiar':'Copy','Cortar':'Cut','Colar':'Paste',
+'Clique: pôr a coluna inteira no ar · Arrastar: mudar a ordem · Duplo clique: renomear':'Click: put the whole column live · Drag: reorder · Double-click: rename',
+'Pôr no ar':'Put live','Inserir antes':'Insert before','Inserir depois':'Insert after','Mover para a esquerda':'Move left','Mover para a direita':'Move right',
+'  %d selecionado(s) · Ctrl+C copiar · Ctrl+V colar · Del apagar':'  %d selected · Ctrl+C copy · Ctrl+V paste · Del delete',
+'  Cima = programa · baixo = preview · Ctrl/Shift+clique = selecionar vários':'  Top = program · bottom = preview · Ctrl/Shift+click = select several',
+'Layout':'Layout','Painéis':'Panels','Efeitos':'Effects','Coluna':'Column','Monitores extra':'Extra monitors',
+'+ Monitor de programa':'+ Program monitor','+ Monitor de preview':'+ Preview monitor','Programa':'Program','Layouts':'Layouts',
+'Gravar layout atual...':'Save current layout...','Carregar layout':'Load layout','Apagar layout':'Delete layout','Repor layout de origem':'Reset to default layout',
+'Nome do layout:':'Layout name:','Gravar layout':'Save layout','Ligar/desligar efeito':'Enable/disable effect','+ Adicionar efeito':'+ Add effect',
+'Master':'Master','Posição X':'Position X','Posição Y':'Position Y','Clica no cabeçalho de uma coluna.':'Click a column header.',
+'Pôr a coluna no ar':'Put the column live','Clips nesta coluna':'Clips in this column','(vazia)':'(empty)','Seleciona um clip na grelha.':'Select a clip in the grid.',
+'Reprodução':'Playback','Procurar...':'Search...',
+'Arrasta um efeito para um clip, o nome de uma layer ou um painel de propriedades.':'Drag an effect onto a clip, a layer name or a properties panel.',
+'OSC':'OSC','Controlo por rede com o Bitfocus Companion, TouchOSC, QLab, etc. Os endereços são os mesmos do Resolume Arena.':'Network control with Bitfocus Companion, TouchOSC, QLab, etc. The addresses are the same as in Resolume Arena.',
+'Endereço IP deste PC:':'This PC\'s IP address:','Entrada OSC':'OSC input','Porta de entrada':'Input port','a ouvir':'listening',
+'Saída OSC (feedback)':'OSC output (feedback)','Endereço de saída':'Output address','Porta de saída':'Output port','Endereços':'Addresses',
+'Layer 1 = a de baixo (como no Resolume). Colunas e clips contam a partir de 1.':'Layer 1 = the bottom one (like Resolume). Columns and clips count from 1.',
+'Pôr a coluna N no ar':'Put column N live','Pôr o clip C da layer L no programa':'Put clip C of layer L on program','Pôr o clip em preview':'Put the clip in preview',
+'Parar a layer L':'Stop layer L','Opacidade da layer':'Layer opacity','Bypass da layer':'Layer bypass','Ligar/desligar saídas':'Turn outputs on/off',
+'Ligar/desligar o ecrã N':'Turn screen N on/off','Enviar preview para programa / limpar':'Send preview to program / clear',
+'Test pattern do ecrã selecionado':'Test pattern of the selected screen','Saída:':'Output:','8. Efeitos e OSC':'8. Effects and OSC',
+'Arrasta efeitos do painel Efeitos para clips, layers ou para a composição. Para controlar com o Companion, liga a entrada OSC em Definições → OSC e usa os mesmos endereços do Resolume.':'Drag effects from the Effects panel onto clips, layers or the composition. To control it from Companion, enable OSC input in Settings → OSC and use the same addresses as Resolume.',
+'9. Gravar':'9. Saving',
+'Efeitos: Cor, Inverter, Tingir, Preto e branco, Limiar, Espelho, Pixelizar, Separação RGB, Vinheta e Strobe, no clip, na layer ou na composição.':'Effects: Color, Invert, Tint, Black & white, Threshold, Mirror, Pixelate, RGB split, Vignette and Strobe, on the clip, the layer or the composition.',
+'Painel Efeitos: arrasta um efeito para um clip, o nome de uma layer ou um painel de propriedades.':'Effects panel: drag an effect onto a clip, a layer name or a properties panel.',
+'Painéis de propriedades separados: Composição, Layer, Coluna e Clip (transformar com rotação e espelho).':'Separate properties panels: Composition, Layer, Column and Clip (transform with rotation and flip).',
+'Layers com cores e menu completo: inserir acima/abaixo, duplicar, renomear, copiar/colar efeitos, limpar, remover, ignorar coluna, bloquear.':'Layers with colors and a full menu: insert above/below, duplicate, rename, copy/paste effects, clear, remove, ignore column, lock.',
+'Colunas: cores, renomear, inserir, duplicar e arrastar para mudar a ordem.':'Columns: colors, rename, insert, duplicate and drag to reorder.',
+'Selecionar vários clips (Ctrl/Shift+clique) e Ctrl+C / Ctrl+V / Ctrl+X / Delete mantendo a ordem.':'Select several clips (Ctrl/Shift+click) and Ctrl+C / Ctrl+V / Ctrl+X / Delete keeping their order.',
+'Menu Layout: mostrar/esconder painéis, monitores extra de programa e preview, gravar e carregar layouts.':'Layout menu: show/hide panels, extra program and preview monitors, save and load layouts.',
+'Definições da composição: nome, descrição, tamanho, frame rate e 8/16 bits por canal.':'Composition settings: name, description, size, frame rate and 8/16 bits per channel.',
+'OSC para o Companion: entrada e saída com endereços compatíveis com o Resolume.':'OSC for Companion: input and output with Resolume-compatible addresses.',
+'Automático':'Automatic','Descrição':'Description','Tamanho':'Size','Frame rate':'Frame rate','Profundidade de cor':'Color depth',
+'16 bpc: gradientes sem bandas e efeitos mais precisos; usa o dobro da memória da placa.':'16 bpc: gradients without banding and more precise effects; uses twice the GPU memory.',
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
 
@@ -201,11 +247,13 @@ if __name__ == '__main__':
         s = open(f, encoding='utf-8').read()
         for m in re.finditer(r'\bT\("((?:[^"\\]|\\.)*)"\)', s): add(m.group(1))
         for m in re.finditer(r'winTitle\("((?:[^"\\]|\\.)*)"', s): add(m.group(1))
-        for name in ('kActionNames[] = {', 'const char* tabs[] = {', 'const Step steps[] = {', 'const Rel rels[] = {'):
+        for name in ('kActionNames[] = {', 'const char* tabs[] = {', 'const Step steps[] = {', 'const Rel rels[] = {',
+                     'static const std::vector<EffectDef> cat = {'):
             if name in s:
                 i = s.index(name); blk = s[i:s.index('};', i)]
                 for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', blk):
-                    if re.search(r'[A-Za-zÀ-ÿ]', m.group(1)): add(m.group(1))
+                    t = m.group(1)
+                    if re.search(r'[A-Za-zÀ-ÿ]', t) and not re.fullmatch(r'[a-z]+', t): add(t)
     missing = [k for k in keys if k not in EN]
     if missing:
         print('SEM TRADUÇÃO EN:'); [print('  ', repr(k)) for k in missing]; sys.exit(1)

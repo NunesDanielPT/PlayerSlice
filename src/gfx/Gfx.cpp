@@ -24,6 +24,9 @@ cbuffer CB : register(b0) {
     float4 gHo0, gHo1, gHo2;   // inversa da homografia da saída (píxel → quadrado unitário)
     float4 gHi0, gHi1, gHi2;   // homografia da entrada (quadrado unitário → UV)
     float4 gAdjust;            // rgb = ganho (-1..1), w = contraste (-1..1)
+    float4 gFxA[4];            // efeitos do clip (ver core/Effects.cpp)
+    float4 gFxB[4];            // efeitos da layer / composição
+    float4 gVid;               // xy = UV máximo, zw = tamanho da textura (px)
 };
 Texture2D    t0 : register(t0);
 Texture2D    t1 : register(t1);
@@ -126,6 +129,78 @@ float4 PS_WarpTest(VSOut i) : SV_Target {
     return PS_Test(i);
 }
 
+// ---------------------------------------------------------------------------
+// Vídeo com efeitos: gParams.w = tipo (0 RGBA/BC, 1 NV12/P010, 2 HAP Q, 3 HAP Q Alpha)
+// ---------------------------------------------------------------------------
+float4 sampleKind(float2 uv) {
+    int kind = (int)gParams.w;
+    if (kind == 1) {
+        float  y  = t0.Sample(s0, uv).r;
+        float2 c  = t1.Sample(s0, uv).rg;
+        float3 yuv = float3(y, c);
+        return float4(dot(gYuvR.xyz, yuv) + gYuvR.w, dot(gYuvG.xyz, yuv) + gYuvG.w, dot(gYuvB.xyz, yuv) + gYuvB.w, 1);
+    }
+    if (kind == 2) return float4(ycocg(t0.Sample(s0, uv)), 1);
+    if (kind == 3) return float4(ycocg(t0.Sample(s0, uv)), t1.Sample(s0, uv).r);
+    return t0.Sample(s0, uv);
+}
+
+float2 fxUV(float2 uv, float4 f3) {
+    float2 m = gVid.xy;                       // UV máximo (HAP com blocos de 4 px)
+    float2 n = uv / m;                        // 0..1
+    if (f3.x > 0.5) n.x = n.x > 0.5 ? 1 - n.x : n.x;
+    if (f3.y > 0.5) n.y = n.y > 0.5 ? 1 - n.y : n.y;
+    if (f3.z > 1.0) {
+        float2 px = max(gVid.zw * m, 1) / f3.z;   // número de blocos
+        n = (floor(n * px) + 0.5) / px;
+    }
+    return n * m;
+}
+
+float3 hueRotate(float3 c, float a) {
+    const float3 k = float3(0.57735, 0.57735, 0.57735);
+    float ca = cos(a);
+    return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1 - ca);
+}
+
+float3 applyFx(float3 c, float2 q, float4 f0, float4 f1, float4 f2) {
+    const float3 lw = float3(0.2126, 0.7152, 0.0722);
+    c = (c - 0.5) * (1 + f0.y) + 0.5 + f0.x;
+    float l = dot(c, lw);
+    c = lerp(float3(l, l, l), c, f0.z);
+    if (abs(f0.w) > 0.0001) c = hueRotate(c, f0.w);
+    c = lerp(c, 1 - c, f2.x);
+    c = lerp(c, dot(c, lw) * f1.rgb * 1.6, f1.w);
+    if (f2.y >= 0) { float t = step(f2.y, dot(saturate(c), lw)); c = float3(t, t, t); }
+    if (f2.z > 0) { float d = length(q - 0.5) * 1.41421; c *= 1 - f2.z * smoothstep(0.35, 1.0, d); }
+    return c;
+}
+
+float4 PS_Video(VSOut i) : SV_Target {
+    float2 uv = fxUV(fxUV(i.uv, gFxA[3]), gFxB[3]);
+    float4 c;
+    float shift = (gFxA[2].w + gFxB[2].w) / max(gVid.z, 1);
+    if (shift > 0) {
+        float4 m = sampleKind(uv);
+        c = float4(sampleKind(uv + float2(shift, 0)).r, m.g, sampleKind(uv - float2(shift, 0)).b, m.a);
+    } else c = sampleKind(uv);
+    float3 rgb = applyFx(c.rgb, i.q, gFxA[0], gFxA[1], gFxA[2]);
+    rgb = applyFx(rgb, i.q, gFxB[0], gFxB[1], gFxB[2]);
+    return finish(rgb, c.a);
+}
+
+// efeitos da composição: passo final sobre a composição inteira (RGBA)
+float4 PS_Fx(VSOut i) : SV_Target {
+    float2 uv = fxUV(i.uv, gFxB[3]);
+    float4 c;
+    float shift = gFxB[2].w / max(gVid.z, 1);
+    if (shift > 0) {
+        float4 m = t0.Sample(s0, uv);
+        c = float4(t0.Sample(s0, uv + float2(shift, 0)).r, m.g, t0.Sample(s0, uv - float2(shift, 0)).b, m.a);
+    } else c = t0.Sample(s0, uv);
+    return finish(applyFx(c.rgb, i.q, gFxB[0], gFxB[1], gFxB[2]), c.a);
+}
+
 float4 PS_Solid(VSOut i) : SV_Target {
     return finish(gColor.rgb, gColor.a);
 }
@@ -140,6 +215,9 @@ struct CBData {
     float ho[3][4];
     float hi[3][4];
     float adjust[4];
+    float fxA[16];
+    float fxB[16];
+    float vid[4];
 };
 
 YuvMatrix makeYuvMatrix(bool bt709, bool fullRange, bool) {
@@ -174,7 +252,7 @@ bool Gfx::compileShaders(std::string* err) {
     auto vs = compile("VS", "vs_5_0", err);
     if (!vs) return false;
     if (FAILED(m_dev->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), nullptr, &m_vs))) return false;
-    const char* names[] = {"PS_RGBA", "PS_YUV", "PS_YCoCg", "PS_YCoCgAlpha", "PS_Test", "PS_Solid", "PS_Warp", "PS_WarpTest"};
+    const char* names[] = {"PS_RGBA", "PS_YUV", "PS_YCoCg", "PS_YCoCgAlpha", "PS_Test", "PS_Solid", "PS_Warp", "PS_WarpTest", "PS_Video", "PS_Fx"};
     for (int i = 0; i < (int)PSKind::Count; ++i) {
         auto ps = compile(names[i], "ps_5_0", err);
         if (!ps) return false;
@@ -392,6 +470,10 @@ void Gfx::drawQuad(const QuadParams& q) {
     for (int r = 0; r < 3; ++r)
         for (int c = 0; c < 3; ++c) { cb->ho[r][c] = q.hOutInv[r * 3 + c]; cb->hi[r][c] = q.hIn[r * 3 + c]; }
     memcpy(cb->adjust, q.adjust, sizeof(cb->adjust));
+    memcpy(cb->fxA, q.fxA, sizeof(cb->fxA));
+    memcpy(cb->fxB, q.fxB, sizeof(cb->fxB));
+    memcpy(cb->vid, q.vid, sizeof(cb->vid));
+    cb->params[3] = q.kind;
     m_ctx->Unmap(m_cb.Get(), 0);
 
     m_ctx->IASetInputLayout(nullptr);

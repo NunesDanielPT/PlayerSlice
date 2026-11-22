@@ -1,6 +1,8 @@
 #include "render/Compositor.h"
 #include "core/Log.h"
 #include "core/Geometry.h"
+#include "core/Effects.h"
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -94,6 +96,7 @@ const RenderTarget* Compositor::previewScreenRT(uint32_t id) const {
 void Compositor::triggerColumn(Project& p, int column) {
     for (int i = 0; i < (int)p.comp.layers.size(); ++i) {
         Layer& l = p.comp.layers[i];
+        if (l.ignoreColumn) continue;
         if (column < (int)l.clips.size() && !l.clips[column].empty()) trigger(p, i, column);
         else stopLayer(p, i);
     }
@@ -118,6 +121,29 @@ void Compositor::stopAll(Project& p) {
 void Compositor::restartLayer(int li, Project& p) {
     if (li < 0 || li >= (int)p.comp.layers.size()) return;
     if (auto* r = runtime(p.comp.layers[li].id)) if (r->cur) r->cur->restart();
+}
+
+void Compositor::remapColumns(Project& p, const std::function<int(int)>& map) {
+    for (auto& l : p.comp.layers) {
+        auto it = m_layers.find(l.id);
+        if (it == m_layers.end()) continue;
+        LayerRuntime& rt = it->second;
+        if (rt.column < 0) continue;
+        int nc = map(rt.column);
+        if (nc < 0) {
+            VideoPlayer::destroyAsync(std::move(rt.cur));
+            VideoPlayer::destroyAsync(std::move(rt.prev));
+            m_layers.erase(it);
+            l.activeColumn = -1;
+        } else {
+            rt.column = nc;
+            l.activeColumn = nc;
+        }
+    }
+    if (m_prev && m_prevCol >= 0) {
+        int nc = map(m_prevCol);
+        if (nc < 0) clearPreview(); else m_prevCol = nc;
+    }
 }
 
 void Compositor::update(Project& p, double now) {
@@ -183,33 +209,61 @@ void Compositor::drawClip(const Project& p, const Layer& l, const Clip& c, Video
     case FitMode::Native: dw = vw; dh = vh; break;
     }
     dw *= c.scale; dh *= c.scale;
-    float dx = R.x + (R.w - dw) * 0.5f + c.offsetX;
-    float dy = R.y + (R.h - dh) * 0.5f + c.offsetY;
-
+    // centro do clip; transformação do clip e depois da layer (em volta do centro da região)
+    float rcx = R.x + R.w * 0.5f, rcy = R.y + R.h * 0.5f;
+    float cx = rcx + c.offsetX, cy = rcy + c.offsetY;
+    const float hw = dw * 0.5f, hh = dh * 0.5f;
+    const float lx[4] = {-hw, hw, -hw, hw}, ly[4] = {-hh, -hh, hh, hh};   // TL, TR, BL, BR
+    const float ca = std::cos(c.rotation * 3.14159265f / 180.f), sa = std::sin(c.rotation * 3.14159265f / 180.f);
+    const float la = std::cos(l.rotation * 3.14159265f / 180.f), lsn = std::sin(l.rotation * 3.14159265f / 180.f);
     QuadParams q;
-    Gfx::rectToNdc(dx, dy, dw, dh, cw, ch, q.pos);
-    float u1 = v.uvMaxX(), v1 = v.uvMaxY();
-    q.uv[0][0] = 0;  q.uv[0][1] = 0;
-    q.uv[1][0] = u1; q.uv[1][1] = 0;
-    q.uv[2][0] = 0;  q.uv[2][1] = v1;
+    float px[4], py[4];
+    for (int i = 0; i < 4; ++i) {
+        float x = cx + lx[i] * ca - ly[i] * sa, y = cy + lx[i] * sa + ly[i] * ca;     // clip
+        float ox = (x - rcx) * l.scale, oy = (y - rcy) * l.scale;                    // layer: escala
+        x = rcx + ox * la - oy * lsn + l.posX; y = rcy + ox * lsn + oy * la + l.posY;  // rotação + posição
+        px[i] = x; py[i] = y;
+        q.pos[i][0] = x / cw * 2.f - 1.f;
+        q.pos[i][1] = 1.f - y / ch * 2.f;
+    }
+    float u0 = 0, u1 = v.uvMaxX(), v0 = 0, v1 = v.uvMaxY();
+    if (c.flipH) std::swap(u0, u1);
+    if (c.flipV) std::swap(v0, v1);
+    q.uv[0][0] = u0; q.uv[0][1] = v0;
+    q.uv[1][0] = u1; q.uv[1][1] = v0;
+    q.uv[2][0] = u0; q.uv[2][1] = v1;
     q.uv[3][0] = u1; q.uv[3][1] = v1;
     q.srv0 = t.srv[0].Get();
     q.srv1 = t.srv[1].Get();
-    q.ps = v.psKind();
+    q.ps = PSKind::Video;
+    switch (v.psKind()) {
+    case PSKind::YUV: q.kind = 1; break;
+    case PSKind::YCoCg: q.kind = 2; break;
+    case PSKind::YCoCgAlpha: q.kind = 3; break;
+    default: q.kind = 0; break;
+    }
     q.yuv = v.yuv();
-    q.opacity = opacity;
+    q.vid[0] = v.uvMaxX(); q.vid[1] = v.uvMaxY(); q.vid[2] = vw; q.vid[3] = vh;
+    FxParams fa = aggregateFx(c.effects, m_now), fb = aggregateFx(l.effects, m_now);
+    memcpy(q.fxA, fa.v, sizeof(q.fxA));
+    memcpy(q.fxB, fb.v, sizeof(q.fxB));
+    q.opacity = opacity * fa.opacityMul * fb.opacityMul;
+    if (q.opacity <= 0.001f) return;
     switch (l.blend) {
     case BlendMode::Normal: q.blend = Blend::Alpha; break;
     case BlendMode::Add: q.blend = Blend::Add; break;
     case BlendMode::Multiply: q.blend = Blend::Multiply; break;
     case BlendMode::Screen: q.blend = Blend::Screen; break;
     }
-    // vídeo do tamanho exato da região → amostragem por pontos (píxel perfeito no LED)
-    q.pointSample = std::fabs(dw - vw) < 0.01f && std::fabs(dh - vh) < 0.01f &&
-                    std::fabs(dx - std::round(dx)) < 0.01f && std::fabs(dy - std::round(dy)) < 0.01f;
+    // vídeo do tamanho exato, sem rotação nem efeitos de UV → amostragem por pontos (píxel perfeito no LED)
+    bool noRot = std::fabs(c.rotation) < 0.001f && std::fabs(l.rotation) < 0.001f;
+    float sw = px[1] - px[0], sh = py[2] - py[0];
+    q.pointSample = noRot && std::fabs(std::fabs(sw) - vw) < 0.01f && std::fabs(std::fabs(sh) - vh) < 0.01f &&
+                    std::fabs(px[0] - std::round(px[0])) < 0.01f && std::fabs(py[0] - std::round(py[0])) < 0.01f &&
+                    fa.v[14] <= 1 && fb.v[14] <= 1;
 
     Gfx& G = gfx();
-    G.setScissor((int)std::floor(R.x), (int)std::floor(R.y), (int)std::ceil(R.w), (int)std::ceil(R.h));
+    if (l.useRegion) G.setScissor((int)std::floor(R.x), (int)std::floor(R.y), (int)std::ceil(R.w), (int)std::ceil(R.h));
     G.drawQuad(q);
     G.clearScissor();
 }
@@ -233,22 +287,43 @@ ID3D11ShaderResourceView* Compositor::sourceFor(uint32_t layerId) const {
 void Compositor::render(Project& p) {
     Gfx& G = gfx();
     const int cw = p.comp.width, ch = p.comp.height;
-    if (!m_comp.valid() || m_comp.w != cw || m_comp.h != ch) {
-        if (!G.createRT(m_comp, cw, ch)) return;
-        PS_INFO("Composição %dx%d", cw, ch);
+    const DXGI_FORMAT fmt = p.comp.colorDepth == 16 ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    if (!m_comp.valid() || m_comp.w != cw || m_comp.h != ch || m_compFmt != fmt) {
+        if (!G.createRT(m_comp, cw, ch, fmt)) return;
+        m_compRaw = {};
+        m_compFmt = fmt;
+        PS_INFO("Composição %dx%d %dbpc", cw, ch, p.comp.colorDepth);
     }
+    // com efeitos na composição: desenhar primeiro em m_compRaw e aplicar os efeitos em m_comp
+    FxParams compFx = aggregateFx(p.comp.effects, m_now);
+    const bool useFx = !compFx.identity;
+    if (useFx && (!m_compRaw.valid() || m_compRaw.w != cw || m_compRaw.h != ch)) G.createRT(m_compRaw, cw, ch, fmt);
+    RenderTarget& target = (useFx && m_compRaw.valid()) ? m_compRaw : m_comp;
 
     bool anySolo = std::any_of(p.comp.layers.begin(), p.comp.layers.end(), [](const Layer& l) { return l.solo; });
     auto visible = [&](const Layer& l) { return !l.bypass && (!anySolo || l.solo); };
 
     // 1) composição: da última layer (fundo) para a primeira (topo)
-    G.setTarget(m_comp.rtv.Get(), cw, ch);
-    G.clear(m_comp.rtv.Get(), 0, 0, 0, 1);
+    G.setTarget(target.rtv.Get(), cw, ch);
+    G.clear(target.rtv.Get(), 0, 0, 0, 1);
     for (int i = (int)p.comp.layers.size() - 1; i >= 0; --i) {
         const Layer& l = p.comp.layers[i];
         if (!visible(l)) continue;
         auto it = m_layers.find(l.id);
         if (it != m_layers.end()) drawLayer(p, l, it->second, m_now);
+    }
+    if (&target == &m_compRaw) {
+        G.setTarget(m_comp.rtv.Get(), cw, ch);
+        G.clear(m_comp.rtv.Get(), 0, 0, 0, 1);
+        QuadParams q;
+        Gfx::rectToNdc(0, 0, (float)cw, (float)ch, cw, ch, q.pos);
+        q.srv0 = m_compRaw.srv.Get();
+        q.ps = PSKind::Fx;
+        q.blend = Blend::Opaque;
+        memcpy(q.fxB, compFx.v, sizeof(q.fxB));
+        q.vid[2] = (float)cw; q.vid[3] = (float)ch;
+        q.opacity = compFx.opacityMul;
+        G.drawQuad(q);
     }
 
     // 2) layers usadas diretamente como fonte de slices
@@ -263,7 +338,7 @@ void Compositor::render(Project& p) {
         const Layer& l = p.comp.layers[i];
         if (!needed.count(l.id)) continue;
         RenderTarget& rt = m_layerRT[l.id];
-        if (!rt.valid() || rt.w != cw || rt.h != ch) if (!G.createRT(rt, cw, ch)) continue;
+        if (!rt.valid() || rt.w != cw || rt.h != ch) if (!G.createRT(rt, cw, ch, fmt)) continue;
         G.setTarget(rt.rtv.Get(), cw, ch);
         G.clear(rt.rtv.Get(), 0, 0, 0, 0);
         auto it = m_layers.find(l.id);
@@ -271,7 +346,7 @@ void Compositor::render(Project& p) {
     }
 
     // 2b) preview: só o clip em preview, na região da sua layer
-    if (!m_prevRT.valid() || m_prevRT.w != cw || m_prevRT.h != ch) G.createRT(m_prevRT, cw, ch);
+    if (!m_prevRT.valid() || m_prevRT.w != cw || m_prevRT.h != ch) G.createRT(m_prevRT, cw, ch, fmt);
     if (m_prevRT.valid()) {
         G.setTarget(m_prevRT.rtv.Get(), cw, ch);
         G.clear(m_prevRT.rtv.Get(), 0, 0, 0, 1);
@@ -346,7 +421,7 @@ void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTarge
         for (int k = 0; k < 3; ++k) { hi.m[k] /= cw; hi.m[3 + k] /= ch; }
         for (int k = 0; k < 9; ++k) { q.hOutInv[k] = (float)ho.m[k]; q.hIn[k] = (float)hi.m[k]; }
 
-        q.opacity = sl.opacity * s.opacity;
+        q.opacity = sl.opacity * s.opacity * p.comp.master;
         q.brightness = sl.brightness + s.brightness;
         q.adjust[0] = s.red; q.adjust[1] = s.green; q.adjust[2] = s.blue; q.adjust[3] = s.contrast;
         q.blend = Blend::Alpha;

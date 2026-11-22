@@ -4,6 +4,7 @@
 #include "core/I18n.h"
 #include "core/Settings.h"
 #include "core/Updater.h"
+#include "core/Osc.h"
 #include "ui/UI.h"
 #include "video/VideoPlayer.h"
 #include "video/Thumbnail.h"
@@ -200,6 +201,87 @@ void App::applyPerformance() {
     SetThreadExecutionState(s.preventSleep ? (ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED) : ES_CONTINUOUS);
 }
 
+void App::applyOsc() {
+    const Settings& s = settings();
+    Osc::get().configure(s.oscIn, s.oscInPort, s.oscOut, s.oscOutAddr, s.oscOutPort);
+    m_oscSentColumn.clear();
+    m_oscSentLive = -1;
+}
+
+// Endereços compatíveis com o Resolume (1 = layer de baixo, colunas a partir de 1)
+void App::handleOsc() {
+    auto msgs = Osc::get().poll();
+    Project& p = project;
+    const int nL = (int)p.comp.layers.size();
+    auto layerIdx = [&](int n) { return (n >= 1 && n <= nL) ? nL - n : -1; };
+    for (auto& m : msgs) {
+        std::vector<std::string> a;
+        size_t i = 1;
+        while (i <= m.address.size()) {
+            size_t j = m.address.find('/', i);
+            if (j == std::string::npos) j = m.address.size();
+            a.push_back(m.address.substr(i, j - i));
+            i = j + 1;
+        }
+        auto num = [&](size_t k) { return k < a.size() ? atoi(a[k].c_str()) : 0; };
+        const float v = m.value(1.f);
+        const bool press = v > 0.5f;
+        if (a.size() >= 2 && a[0] == "composition") {
+            if (a[1] == "disconnectall") { if (press) comp.stopAll(p); }
+            else if (a[1] == "columns" && a.size() >= 4) {
+                int c = num(2) - 1;
+                if (c >= 0 && c < (int)p.comp.columns.size()) {
+                    if (a[3] == "connect" && press) comp.triggerColumn(p, c);
+                    else if (a[3] == "select" && press) ui.selColumnProp = c;
+                }
+            } else if (a[1] == "layers" && a.size() >= 4) {
+                int li = layerIdx(num(2));
+                if (li < 0) continue;
+                Layer& l = p.comp.layers[li];
+                if (a[3] == "clear" && press) comp.stopLayer(p, li);
+                else if (a[3] == "clips" && a.size() >= 6) {
+                    int c = num(4) - 1;
+                    if (c < 0 || c >= (int)l.clips.size()) continue;
+                    if (a[5] == "connect" && press) comp.trigger(p, li, c);
+                    else if (a[5] == "select" && press) comp.previewClip(p, li, c);
+                }
+                else if (a[3] == "video" && a.size() >= 5 && a[4] == "opacity") l.opacity = std::clamp(v, 0.f, 1.f);
+                else if (a[3] == "bypassed") l.bypass = press;
+                else if (a[3] == "solo") l.solo = press;
+            } else if (a[1] == "video" && a.size() >= 3 && a[2] == "opacity") p.comp.master = std::clamp(v, 0.f, 1.f);
+        } else if (a.size() >= 2 && a[0] == "playerslice") {
+            if (a[1] == "outputs" && a.size() >= 3) {
+                if (a[2] == "toggle" && press) toggleOutputs();
+                else if (a[2] == "on" && press) setAllOutputs(true);
+                else if (a[2] == "off" && press) setAllOutputs(false);
+            } else if (a[1] == "preview" && a.size() >= 3) {
+                if (a[2] == "take" && press) comp.takePreview(p);
+                else if (a[2] == "clear" && press) comp.clearPreview();
+            } else if (a[1] == "screens" && a.size() >= 4 && a[3] == "output") {
+                int si = num(2) - 1;
+                if (si >= 0 && si < (int)p.screens.size()) setOutput(p.screens[si].id, press);
+            } else if (a[1] == "testpattern" && press) {
+                runAction((int)Action::TestPattern);
+            } else if (a[1] == "stopall" && press) comp.stopAll(p);
+        }
+    }
+
+    // feedback para o Companion (só quando muda)
+    if (!settings().oscOut) return;
+    if ((int)m_oscSentColumn.size() != nL) m_oscSentColumn.assign(nL, -2);
+    for (int li = 0; li < nL; ++li) {
+        int cur = p.comp.layers[li].activeColumn;
+        int& sent = m_oscSentColumn[li];
+        if (cur == sent) continue;
+        std::string base = "/composition/layers/" + std::to_string(nL - li) + "/clips/";
+        if (sent >= 0) Osc::get().send(base + std::to_string(sent + 1) + "/connected", 0);
+        if (cur >= 0) Osc::get().send(base + std::to_string(cur + 1) + "/connected", 1);
+        sent = cur;
+    }
+    int live = anyLive() ? 1 : 0;
+    if (live != m_oscSentLive) { Osc::get().send("/playerslice/outputs/live", live); m_oscSentLive = live; }
+}
+
 void App::applyLanguage() {
     setLanguage(langFromCode(settings().language));
 }
@@ -360,6 +442,9 @@ void App::frame() {
     ThumbnailCache::get().poll();
     comp.update(project, now);
     comp.render(project);
+    handleOsc();
+    applyPendingLayout(*this);
+
     // limpar ids de ecrãs apagados ou sem dispositivo
     for (auto it = liveScreens.begin(); it != liveScreens.end();) {
         const Screen* s = project.findScreen(*it);
@@ -377,6 +462,7 @@ void App::frame() {
         ImGui::NewFrame();
         drawUI(*this);
         ImGui::Render();
+        pendingDrops.clear();
 
         Gfx& G = gfx();
         RECT cr; GetClientRect(m_hwnd, &cr);
@@ -436,6 +522,8 @@ int App::run(HINSTANCE inst) {
 
     refreshDisplays();
     newProject();
+    loadUiState(*this);
+    applyOsc();
 
     // recuperar trabalho depois de um crash
     std::wstring rec = dir + L"\\crash_recovery.psproj";
@@ -469,6 +557,8 @@ int App::run(HINSTANCE inst) {
         frame();
     }
 
+    saveUiState(*this);
+    Osc::get().shutdown();
     outputs.closeAll();
     comp.stopAll(project);
     comp.shutdown();

@@ -43,19 +43,22 @@ void Slice::outputQuad(float q[4][2]) const {
     }
 }
 
-Layer& Project::addLayer(const std::string& name) {
+Layer& Project::insertLayer(int index, const std::string& name) {
     Layer l;
     l.id = newId();
     l.name = name;
     l.region = {0, 0, (float)comp.width, (float)comp.height};
     l.clips.resize(comp.columns.size());
-    comp.layers.insert(comp.layers.begin(), l); // nova layer fica no topo
-    return comp.layers.front();
+    index = std::clamp(index, 0, (int)comp.layers.size());
+    comp.layers.insert(comp.layers.begin() + index, l);
+    return comp.layers[index];
 }
+
+Layer& Project::addLayer(const std::string& name) { return insertLayer(0, name); } // nova layer fica no topo
 
 void Project::ensureColumns(int n) {
     while ((int)comp.columns.size() < n)
-        comp.columns.push_back("Coluna " + std::to_string(comp.columns.size() + 1));
+        comp.columns.push_back(Column{"Coluna " + std::to_string(comp.columns.size() + 1), 0});
     for (auto& l : comp.layers)
         if ((int)l.clips.size() < (int)comp.columns.size()) l.clips.resize(comp.columns.size());
 }
@@ -120,6 +123,26 @@ Project Project::makeDefault() {
 // ---------------------------------------------------------------------------
 // JSON
 // ---------------------------------------------------------------------------
+static json fxJ(const std::vector<Effect>& fx) {
+    json a = json::array();
+    for (auto& e : fx) a.push_back({{"type", e.type}, {"on", e.enabled}, {"p", e.p}});
+    return a;
+}
+static std::vector<Effect> fxFrom(const json& j) {
+    std::vector<Effect> out;
+    if (!j.is_array()) return out;
+    for (auto& x : j) {
+        if (!x.is_object() || !x.contains("type") || !x["type"].is_string()) continue;
+        Effect e = makeEffect(x["type"].get<std::string>());
+        if (!findEffect(e.type)) continue;
+        e.enabled = x.value("on", true);
+        if (x.contains("p") && x["p"].is_array())
+            for (size_t i = 0; i < x["p"].size() && i < e.p.size(); ++i) if (x["p"][i].is_number()) e.p[i] = x["p"][i];
+        out.push_back(e);
+    }
+    return out;
+}
+
 static json rectJ(const Rect& r) { return json::array({r.x, r.y, r.w, r.h}); }
 static Rect rectFrom(const json& j) {
     Rect r;
@@ -133,8 +156,11 @@ std::string Project::toJson() const {
     j["format"] = 1;
     j["nextId"] = nextId;
     json& c = j["composition"];
+    c["name"] = comp.name; c["description"] = comp.description;
     c["width"] = comp.width; c["height"] = comp.height; c["fps"] = comp.fps;
-    c["columns"] = comp.columns;
+    c["colorDepth"] = comp.colorDepth; c["master"] = comp.master; c["effects"] = fxJ(comp.effects);
+    c["columns"] = json::array();
+    for (auto& col : comp.columns) c["columns"].push_back({{"name", col.name}, {"color", col.color}});
     c["layers"] = json::array();
     for (auto& l : comp.layers) {
         json lj;
@@ -142,6 +168,8 @@ std::string Project::toJson() const {
         lj["blend"] = (int)l.blend; lj["bypass"] = l.bypass; lj["solo"] = l.solo;
         lj["locked"] = l.locked; lj["fadeTime"] = l.fadeTime;
         lj["useRegion"] = l.useRegion; lj["region"] = rectJ(l.region);
+        lj["color"] = l.color; lj["ignoreColumn"] = l.ignoreColumn;
+        lj["transform"] = {l.posX, l.posY, l.scale, l.rotation}; lj["effects"] = fxJ(l.effects);
         lj["clips"] = json::array();
         for (auto& cl : l.clips) {
             json cj;
@@ -149,6 +177,7 @@ std::string Project::toJson() const {
                 cj["id"] = cl.id; cj["path"] = cl.path; cj["name"] = cl.name;
                 cj["loop"] = (int)cl.loop; cj["speed"] = cl.speed; cj["opacity"] = cl.opacity;
                 cj["fit"] = (int)cl.fit; cj["offset"] = {cl.offsetX, cl.offsetY}; cj["scale"] = cl.scale;
+                cj["rotation"] = cl.rotation; cj["flipH"] = cl.flipH; cj["flipV"] = cl.flipV; cj["effects"] = fxJ(cl.effects);
             }
             lj["clips"].push_back(cj);
         }
@@ -192,8 +221,16 @@ bool Project::fromJson(const std::string& text, std::string* err) {
         Project p;
         get(j, "nextId", p.nextId);
         const json& c = j.at("composition");
+        get(c, "name", p.comp.name); get(c, "description", p.comp.description);
         get(c, "width", p.comp.width); get(c, "height", p.comp.height); get(c, "fps", p.comp.fps);
-        get(c, "columns", p.comp.columns);
+        get(c, "colorDepth", p.comp.colorDepth); get(c, "master", p.comp.master);
+        if (c.contains("effects")) p.comp.effects = fxFrom(c["effects"]);
+        for (auto& cj : c.value("columns", json::array())) {
+            Column col;
+            if (cj.is_string()) col.name = cj.get<std::string>();          // formato antigo
+            else if (cj.is_object()) { get(cj, "name", col.name); get(cj, "color", col.color); }
+            p.comp.columns.push_back(col);
+        }
         for (auto& lj : c.value("layers", json::array())) {
             Layer l;
             get(lj, "id", l.id); get(lj, "name", l.name); get(lj, "opacity", l.opacity);
@@ -201,6 +238,11 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             get(lj, "bypass", l.bypass); get(lj, "solo", l.solo); get(lj, "locked", l.locked);
             get(lj, "fadeTime", l.fadeTime); get(lj, "useRegion", l.useRegion);
             if (lj.contains("region")) l.region = rectFrom(lj["region"]);
+            get(lj, "color", l.color); get(lj, "ignoreColumn", l.ignoreColumn);
+            if (lj.contains("transform") && lj["transform"].size() == 4) {
+                l.posX = lj["transform"][0]; l.posY = lj["transform"][1]; l.scale = lj["transform"][2]; l.rotation = lj["transform"][3];
+            }
+            if (lj.contains("effects")) l.effects = fxFrom(lj["effects"]);
             for (auto& cj : lj.value("clips", json::array())) {
                 Clip cl;
                 if (cj.is_object() && cj.contains("path")) {
@@ -210,6 +252,8 @@ bool Project::fromJson(const std::string& text, std::string* err) {
                     int f = 0; get(cj, "fit", f); cl.fit = (FitMode)f;
                     if (cj.contains("offset")) { cl.offsetX = cj["offset"][0]; cl.offsetY = cj["offset"][1]; }
                     get(cj, "scale", cl.scale);
+                    get(cj, "rotation", cl.rotation); get(cj, "flipH", cl.flipH); get(cj, "flipV", cl.flipV);
+                    if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
                 }
                 l.clips.push_back(cl);
             }
@@ -247,6 +291,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
         // validação defensiva
         p.comp.width  = std::clamp(p.comp.width, 16, 16384);
         p.comp.height = std::clamp(p.comp.height, 16, 16384);
+        if (p.comp.colorDepth != 16) p.comp.colorDepth = 8;
         p.ensureColumns(std::max<int>(1, (int)p.comp.columns.size()));
         uint32_t maxId = 0;
         for (auto& l : p.comp.layers) { maxId = std::max(maxId, l.id); for (auto& cl : l.clips) maxId = std::max(maxId, cl.id); }

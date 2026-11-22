@@ -117,6 +117,9 @@ bool Settings::load() {
         hwDecode = j.value("hwDecode", hwDecode);
         decodeBuffer = std::clamp(j.value("decodeBuffer", decodeBuffer), 3, 16);
         limitUiWhenLive = j.value("limitUiWhenLive", limitUiWhenLive);
+        oscIn = j.value("oscIn", oscIn); oscInPort = std::clamp(j.value("oscInPort", oscInPort), 1, 65535);
+        oscOut = j.value("oscOut", oscOut); oscOutAddr = j.value("oscOutAddr", oscOutAddr);
+        oscOutPort = std::clamp(j.value("oscOutPort", oscOutPort), 1, 65535);
         if (j.contains("keys")) {
             for (int i = 0; i < (int)Action::Count; ++i) {
                 auto it = j["keys"].find(kActionIds[i]);
@@ -140,6 +143,8 @@ bool Settings::save() const {
     j["outputsOffBlack"] = outputsOffBlack; j["startOutputsLive"] = startOutputsLive; j["checkUpdates"] = checkUpdates;
     j["priority"] = priority; j["preventSleep"] = preventSleep; j["hwDecode"] = hwDecode;
     j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive;
+    j["oscIn"] = oscIn; j["oscInPort"] = oscInPort; j["oscOut"] = oscOut;
+    j["oscOutAddr"] = oscOutAddr; j["oscOutPort"] = oscOutPort;
     for (int i = 0; i < (int)Action::Count; ++i) {
         const KeyBinding& b = keys[i];
         j["keys"][kActionIds[i]] = {{"key", b.key}, {"ctrl", b.ctrl}, {"shift", b.shift}, {"alt", b.alt}};

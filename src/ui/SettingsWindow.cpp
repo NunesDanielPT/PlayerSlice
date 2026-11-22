@@ -5,6 +5,7 @@
 #include "core/Log.h"
 #include "core/Settings.h"
 #include "core/Updater.h"
+#include "core/Osc.h"
 #include <imgui.h>
 #include <shellapi.h>
 #include <algorithm>
@@ -97,6 +98,68 @@ void sectionAudio() {
     }
 }
 
+void sectionOsc(App& app) {
+    Settings& s = settings();
+    ImGui::SeparatorText(T("OSC"));
+    ImGui::TextWrapped("%s", T("Controlo por rede com o Bitfocus Companion, TouchOSC, QLab, etc. Os endereços são os mesmos do Resolume Arena."));
+    ImGui::Spacing();
+    std::string ips;
+    for (auto& n : g_nets) if (n.up && !n.ipv4.empty()) ips += (ips.empty() ? "" : ",  ") + n.ipv4;
+    ImGui::Text("%s %s", T("Endereço IP deste PC:"), ips.empty() ? "—" : ips.c_str());
+    ImGui::Spacing();
+    bool ch = false;
+    ch |= ImGui::Checkbox(T("Entrada OSC"), &s.oscIn);
+    ImGui::SetNextItemWidth(120);
+    ch |= ImGui::InputInt(T("Porta de entrada"), &s.oscInPort, 0);
+    if (s.oscIn) {
+        ImGui::SameLine();
+        std::string err = Osc::get().lastError();
+        if (!err.empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", err.c_str());
+        else if (Osc::get().inputRunning()) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1), "%s", T("a ouvir"));
+    }
+    ImGui::Spacing();
+    ch |= ImGui::Checkbox(T("Saída OSC (feedback)"), &s.oscOut);
+    char addr[64]; snprintf(addr, sizeof(addr), "%s", s.oscOutAddr.c_str());
+    ImGui::SetNextItemWidth(160);
+    if (ImGui::InputText(T("Endereço de saída"), addr, sizeof(addr))) { s.oscOutAddr = addr; ch = true; }
+    ImGui::SetNextItemWidth(120);
+    ch |= ImGui::InputInt(T("Porta de saída"), &s.oscOutPort, 0);
+    s.oscInPort = std::clamp(s.oscInPort, 1, 65535);
+    s.oscOutPort = std::clamp(s.oscOutPort, 1, 65535);
+    if (ch) { app.applyOsc(); save(); }
+
+    ImGui::SeparatorText(T("Endereços"));
+    ImGui::TextDisabled("%s", T("Layer 1 = a de baixo (como no Resolume). Colunas e clips contam a partir de 1."));
+    const char* rows[][2] = {
+        {"/composition/columns/N/connect", T("Pôr a coluna N no ar")},
+        {"/composition/layers/L/clips/C/connect", T("Pôr o clip C da layer L no programa")},
+        {"/composition/layers/L/clips/C/select", T("Pôr o clip em preview")},
+        {"/composition/layers/L/clear", T("Parar a layer L")},
+        {"/composition/disconnectall", T("Parar todos os clips")},
+        {"/composition/layers/L/video/opacity  (0..1)", T("Opacidade da layer")},
+        {"/composition/layers/L/bypassed  (0/1)", T("Bypass da layer")},
+        {"/composition/video/opacity  (0..1)", T("Master")},
+        {"/playerslice/outputs/toggle | on | off", T("Ligar/desligar saídas")},
+        {"/playerslice/screens/N/output  (0/1)", T("Ligar/desligar o ecrã N")},
+        {"/playerslice/preview/take | clear", T("Enviar preview para programa / limpar")},
+        {"/playerslice/testpattern", T("Test pattern do ecrã selecionado")},
+        {T("Saída:"), "/composition/layers/L/clips/C/connected 0/1 · /playerslice/outputs/live 0/1"},
+    };
+    if (ImGui::BeginTable("oscaddr", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
+        for (auto& r : rows) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(r[0]);
+            ImGui::TableSetColumnIndex(1); ImGui::TextDisabled("%s", r[1]);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::SeparatorText(T("Monitor"));
+    ImGui::BeginChild("oscmon", ImVec2(0, 140), ImGuiChildFlags_Borders);
+    for (auto& l : Osc::get().monitor()) ImGui::TextUnformatted(l.c_str());
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 10) ImGui::SetScrollHereY(1.0f);
+    ImGui::EndChild();
+}
+
 void sectionPerformance(App& app) {
     Settings& s = settings();
     ImGui::SeparatorText(T("Performance"));
@@ -132,7 +195,8 @@ void sectionHowTo() {
         {"5. Vídeos", "Arrasta os vídeos do Explorador para as células da grelha (ou duplo clique numa célula vazia)."},
         {"6. Preview e Programa", "Clica na metade de baixo de um clip para o ver em Preview; na metade de cima vai para o Programa (no ar). Enter envia o preview para o ar. O cabeçalho de uma coluna põe a coluna inteira no ar."},
         {"7. Ligar as saídas", "Marca os ecrãs \"No atalho\" e carrega em F12 para ligar/desligar as saídas. Ctrl+F12 liga todas, Shift+F12 desliga todas."},
-        {"8. Gravar", "Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash."},
+        {"8. Efeitos e OSC", "Arrasta efeitos do painel Efeitos para clips, layers ou para a composição. Para controlar com o Companion, liga a entrada OSC em Definições → OSC e usa os mesmos endereços do Resolume."},
+        {"9. Gravar", "Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash."},
     };
     for (auto& st : steps) {
         ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s", T(st.title));
@@ -151,6 +215,17 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.4.0", {
+            "Efeitos: Cor, Inverter, Tingir, Preto e branco, Limiar, Espelho, Pixelizar, Separação RGB, Vinheta e Strobe, no clip, na layer ou na composição.",
+            "Painel Efeitos: arrasta um efeito para um clip, o nome de uma layer ou um painel de propriedades.",
+            "Painéis de propriedades separados: Composição, Layer, Coluna e Clip (transformar com rotação e espelho).",
+            "Layers com cores e menu completo: inserir acima/abaixo, duplicar, renomear, copiar/colar efeitos, limpar, remover, ignorar coluna, bloquear.",
+            "Colunas: cores, renomear, inserir, duplicar e arrastar para mudar a ordem.",
+            "Selecionar vários clips (Ctrl/Shift+clique) e Ctrl+C / Ctrl+V / Ctrl+X / Delete mantendo a ordem.",
+            "Menu Layout: mostrar/esconder painéis, monitores extra de programa e preview, gravar e carregar layouts.",
+            "Definições da composição: nome, descrição, tamanho, frame rate e 8/16 bits por canal.",
+            "OSC para o Companion: entrada e saída com endereços compatíveis com o Resolume.",
+        }},
         {"0.3.2", {
             "Correção: arrastar vídeos do Explorador para a grelha não funcionava quando a app abria como administrador (depois de instalar/atualizar).",
             "Largar vídeos ou clips em cima do nome de uma layer põe-nos na primeira célula livre dessa layer.",
@@ -345,9 +420,9 @@ void drawSettings(App& app) {
     if (!ImGui::Begin(title.c_str(), &app.ui.showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
     if (!g_listed) refreshLists();
 
-    const char* tabs[] = {"Geral", "Vídeo", "Áudio", "Rede", "Performance", "Atalhos", "Atualizações", "Como usar", "Novidades", "Sobre"};
+    const char* tabs[] = {"Geral", "Vídeo", "Áudio", "Rede", "OSC", "Performance", "Atalhos", "Atualizações", "Como usar", "Novidades", "Sobre"};
     ImGui::BeginChild("nav", ImVec2(180, 0), ImGuiChildFlags_Borders);
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 11; ++i) {
         std::string l = std::string(T(tabs[i])) + "##tab" + std::to_string(i);
         if (ImGui::Selectable(l.c_str(), app.ui.settingsTab == i, 0, ImVec2(0, 26))) app.ui.settingsTab = i;
     }
@@ -361,11 +436,12 @@ void drawSettings(App& app) {
     case 1: sectionGpu(app); break;
     case 2: sectionAudio(); break;
     case 3: sectionNetwork(); break;
-    case 4: sectionPerformance(app); break;
-    case 5: sectionShortcuts(); break;
-    case 6: sectionUpdates(app); break;
-    case 7: sectionHowTo(); break;
-    case 8: sectionWhatsNew(); break;
+    case 4: sectionOsc(app); break;
+    case 5: sectionPerformance(app); break;
+    case 6: sectionShortcuts(); break;
+    case 7: sectionUpdates(app); break;
+    case 8: sectionHowTo(); break;
+    case 9: sectionWhatsNew(); break;
     default: sectionAbout(); break;
     }
     ImGui::EndChild();

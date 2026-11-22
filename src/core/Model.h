@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include "core/Effects.h"
 
 // ============================================================================
 // Modelo de dados do PLAYERSLICE
@@ -35,10 +36,18 @@ struct Clip {
     float       speed = 1.0f;
     float       opacity = 1.0f;
     FitMode     fit = FitMode::Stretch;
-    // ajuste fino dentro da região da layer (em píxeis da composição)
+    // transformação dentro da região da layer (em píxeis da composição)
     float       offsetX = 0, offsetY = 0;
     float       scale = 1.0f;
+    float       rotation = 0.0f;   // graus
+    bool        flipH = false, flipV = false;
+    std::vector<Effect> effects;
     bool empty() const { return path.empty(); }
+};
+
+struct Column {
+    std::string name;
+    uint32_t    color = 0;          // 0 = sem cor
 };
 
 struct Layer {
@@ -50,6 +59,11 @@ struct Layer {
     bool        solo = false;       // S — só esta
     bool        locked = false;
     float       fadeTime = 0.0f;    // crossfade entre clips (s)
+    uint32_t    color = 0;          // cor da layer na grelha (0 = sem cor)
+    bool        ignoreColumn = false; // não reage ao disparo de colunas
+    // transformação da layer inteira
+    float       posX = 0, posY = 0, scale = 1.0f, rotation = 0.0f;
+    std::vector<Effect> effects;
     bool        useRegion = false;  // false = composição inteira
     Rect        region;             // em píxeis da composição
     std::vector<Clip> clips;        // uma por coluna
@@ -57,10 +71,15 @@ struct Layer {
 };
 
 struct Composition {
+    std::string name = "Sem título";
+    std::string description;
     int width = 1920;
     int height = 1080;
-    float fps = 50.0f;
-    std::vector<std::string> columns;
+    float fps = 0.0f;               // 0 = automático
+    int colorDepth = 8;             // 8 ou 16 bits por canal
+    float master = 1.0f;            // opacidade geral
+    std::vector<Effect> effects;
+    std::vector<Column> columns;
     std::vector<Layer> layers;      // índice 0 = layer do topo (desenhada por último)
 };
 
@@ -115,6 +134,7 @@ struct Project {
     uint32_t newId() { return nextId++; }
 
     Layer&  addLayer(const std::string& name);
+    Layer&  insertLayer(int index, const std::string& name);
     void    ensureColumns(int n);
     Screen& addScreen(const std::string& name);
     Slice&  addSlice(Screen& s, const std::string& name);

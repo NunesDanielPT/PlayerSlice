@@ -36,6 +36,8 @@ enum class PSKind : int {
     Solid,       // cor lisa
     Warp,        // slice com perspetiva (homografias em hOutInv / hIn)
     WarpTest,    // test pattern com perspetiva
+    Video,       // vídeo (qualquer formato) + efeitos de clip e layer
+    Fx,          // efeitos da composição (passo final)
     Count
 };
 
@@ -63,6 +65,11 @@ struct QuadParams {
     float hOutInv[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
     float hIn[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
     float adjust[4] = {0, 0, 0, 0};   // ganho r,g,b e contraste
+    // efeitos (layout em core/Effects.cpp); identidade por omissão
+    float fxA[16] = {0, 0, 1, 0, 1, 1, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0};
+    float fxB[16] = {0, 0, 1, 0, 1, 1, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0};
+    float vid[4] = {1, 1, 1, 1};      // UV máximo, tamanho da textura
+    float kind = 0;                   // PS Video: 0 RGBA, 1 YUV, 2 YCoCg, 3 YCoCg+alfa
 };
 
 class Gfx {
