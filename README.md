@@ -91,11 +91,11 @@ Os builds oficiais são feitos automaticamente pelo **GitHub Actions** em cada
 push (separador *Actions* → artefacto `PLAYERSLICE-win64` com `.zip` e instalador).
 Uma tag `v*` cria uma *release*.
 
-Localmente (Visual Studio 2022 + CMake):
+Localmente (Visual Studio 2022 ou 2026 + CMake):
 
 ```powershell
 ./scripts/get-deps.ps1
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -A x64
 cmake --build build --config Release
 ```
 

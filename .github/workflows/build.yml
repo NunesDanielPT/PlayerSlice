@@ -30,7 +30,7 @@ jobs:
         run: ./scripts/get-deps.ps1
 
       - name: Configurar
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DFFMPEG_DIR="${{ github.workspace }}/third_party/ffmpeg"
+        run: cmake -S . -B build -A x64 -DFFMPEG_DIR="${{ github.workspace }}/third_party/ffmpeg"
 
       - name: Compilar
         run: cmake --build build --config Release --parallel
