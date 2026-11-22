@@ -77,6 +77,14 @@ struct Slice {
     float       opacity = 1.0f;
     float       brightness = 0.0f;  // -1..1
     uint32_t    color = 0;          // cor no editor/test pattern (RGBA)
+    // warp de 4 pontos (perspetiva). Cantos: 0 topo-esq, 1 topo-dir, 2 baixo-dir, 3 baixo-esq
+    bool        inWarp = false;     // entrada: quadrilátero livre na composição
+    float       inPts[4][2] = {};
+    bool        outWarp = false;    // saída: quadrilátero livre no ecrã (encaixar em paredes)
+    float       outPts[4][2] = {};
+
+    void inputQuad(float q[4][2]) const;   // cantos da entrada (com espelhos aplicados)
+    void outputQuad(float q[4][2]) const;  // cantos da saída (rotação ou pontos)
 };
 
 enum class ScreenDevice : int { Disabled = 0, Window = 1, Monitor = 2 };
@@ -89,6 +97,11 @@ struct Screen {
     int         width = 1920;
     int         height = 1080;
     float       brightness = 0.0f;
+    float       opacity = 1.0f;
+    float       contrast = 0.0f;    // -1..1
+    float       red = 0, green = 0, blue = 0; // -1..1 (ganho por canal)
+    std::string guidePath;          // Output Guide: imagem de referência no editor
+    float       guideOpacity = 0.5f;
     bool        testPattern = false;
     bool        inToggle = true;    // incluído no atalho ligar/desligar saídas
     std::vector<Slice> slices;

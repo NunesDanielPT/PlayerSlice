@@ -34,6 +34,8 @@ enum class PSKind : int {
     YCoCgAlpha,  // HAP Q Alpha (2ª textura BC4 = alfa)
     Test,        // test pattern
     Solid,       // cor lisa
+    Warp,        // slice com perspetiva (homografias em hOutInv / hIn)
+    WarpTest,    // test pattern com perspetiva
     Count
 };
 
@@ -57,6 +59,10 @@ struct QuadParams {
     float aspect = 1.f;  // largura/altura do quad (test pattern)
     const YuvMatrix* yuv = nullptr;
     bool pointSample = false;
+    // warp: píxel do alvo → (s,t) [hOutInv]; (s,t) → UV da textura [hIn]
+    float hOutInv[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    float hIn[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    float adjust[4] = {0, 0, 0, 0};   // ganho r,g,b e contraste
 };
 
 class Gfx {

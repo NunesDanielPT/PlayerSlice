@@ -21,6 +21,9 @@ cbuffer CB : register(b0) {
     float4 gYuvR;
     float4 gYuvG;
     float4 gYuvB;
+    float4 gHo0, gHo1, gHo2;   // inversa da homografia da saída (píxel → quadrado unitário)
+    float4 gHi0, gHi1, gHi2;   // homografia da entrada (quadrado unitário → UV)
+    float4 gAdjust;            // rgb = ganho (-1..1), w = contraste (-1..1)
 };
 Texture2D    t0 : register(t0);
 Texture2D    t1 : register(t1);
@@ -101,6 +104,28 @@ float4 PS_Test(VSOut i) : SV_Target {
     return finish(col, 1);
 }
 
+// coordenadas (s,t) dentro do quadrilátero de saída, com perspetiva correta
+float2 warpST(float2 px) {
+    float3 p = float3(px, 1);
+    float3 st = float3(dot(gHo0.xyz, p), dot(gHo1.xyz, p), dot(gHo2.xyz, p));
+    return st.xy / st.z;
+}
+
+float4 PS_Warp(VSOut i) : SV_Target {
+    float2 st = warpST(i.pos.xy);
+    float3 s3 = float3(st, 1);
+    float3 uv = float3(dot(gHi0.xyz, s3), dot(gHi1.xyz, s3), dot(gHi2.xyz, s3));
+    float4 c = t0.Sample(s0, uv.xy / uv.z);
+    float3 rgb = (c.rgb - 0.5) * (1 + gAdjust.w) + 0.5;
+    rgb *= (1 + gAdjust.rgb);
+    return finish(rgb, c.a);
+}
+
+float4 PS_WarpTest(VSOut i) : SV_Target {
+    i.q = saturate(warpST(i.pos.xy));
+    return PS_Test(i);
+}
+
 float4 PS_Solid(VSOut i) : SV_Target {
     return finish(gColor.rgb, gColor.a);
 }
@@ -112,6 +137,9 @@ struct CBData {
     float color[4];
     float params[4];
     float yr[4], yg[4], yb[4];
+    float ho[3][4];
+    float hi[3][4];
+    float adjust[4];
 };
 
 YuvMatrix makeYuvMatrix(bool bt709, bool fullRange, bool) {
@@ -146,7 +174,7 @@ bool Gfx::compileShaders(std::string* err) {
     auto vs = compile("VS", "vs_5_0", err);
     if (!vs) return false;
     if (FAILED(m_dev->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), nullptr, &m_vs))) return false;
-    const char* names[] = {"PS_RGBA", "PS_YUV", "PS_YCoCg", "PS_YCoCgAlpha", "PS_Test", "PS_Solid"};
+    const char* names[] = {"PS_RGBA", "PS_YUV", "PS_YCoCg", "PS_YCoCgAlpha", "PS_Test", "PS_Solid", "PS_Warp", "PS_WarpTest"};
     for (int i = 0; i < (int)PSKind::Count; ++i) {
         auto ps = compile(names[i], "ps_5_0", err);
         if (!ps) return false;
@@ -361,6 +389,9 @@ void Gfx::drawQuad(const QuadParams& q) {
     memcpy(cb->color, q.color, sizeof(cb->color));
     cb->params[0] = q.opacity; cb->params[1] = q.brightness; cb->params[2] = q.aspect;
     if (q.yuv) { memcpy(cb->yr, q.yuv->r, 16); memcpy(cb->yg, q.yuv->g, 16); memcpy(cb->yb, q.yuv->b, 16); }
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c) { cb->ho[r][c] = q.hOutInv[r * 3 + c]; cb->hi[r][c] = q.hIn[r * 3 + c]; }
+    memcpy(cb->adjust, q.adjust, sizeof(cb->adjust));
     m_ctx->Unmap(m_cb.Get(), 0);
 
     m_ctx->IASetInputLayout(nullptr);

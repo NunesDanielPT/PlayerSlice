@@ -29,6 +29,9 @@ jobs:
         shell: pwsh
         run: ./scripts/get-deps.ps1
 
+      - name: Verificar shaders (fxc)
+        run: python scripts/check_shaders.py
+
       - name: Verificar traduções (PT/EN)
         run: python scripts/i18n_en.py
 

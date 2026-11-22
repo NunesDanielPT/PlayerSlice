@@ -1,5 +1,6 @@
 #include "render/Compositor.h"
 #include "core/Log.h"
+#include "core/Geometry.h"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -325,40 +326,43 @@ void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTarge
     const float cw = (float)p.comp.width, ch = (float)p.comp.height;
 
     for (const Slice& sl : s.slices) {
-        if (!sl.enabled || sl.outW <= 0 || sl.outH <= 0) continue;
+        if (!sl.enabled) continue;
+        float out[4][2], in[4][2];
+        sl.outputQuad(out);
+        sl.inputQuad(in);
+        for (auto& pt : out) { pt[0] *= sx; pt[1] *= sy; }
+        if (!quadIsConvex(out)) continue;   // quadrilátero torcido: não desenhar
+
         QuadParams q;
-        // cantos rodados em volta do centro (px do ecrã) → NDC
-        float hw = sl.outW * 0.5f, hh = sl.outH * 0.5f;
-        float rad = sl.rotation * 3.14159265f / 180.f;
-        float cs = std::cos(rad), sn = std::sin(rad);
-        const float lx[4] = {-hw, hw, -hw, hw}, ly[4] = {-hh, -hh, hh, hh};
+        // vértices pela ordem do triangle strip: TL, TR, BL, BR
+        const int order[4] = {0, 1, 3, 2};
         for (int i = 0; i < 4; ++i) {
-            float px = (sl.outX + lx[i] * cs - ly[i] * sn) * sx;
-            float py = (sl.outY + lx[i] * sn + ly[i] * cs) * sy;
-            q.pos[i][0] = px / w * 2.f - 1.f;
-            q.pos[i][1] = 1.f - py / h * 2.f;
+            q.pos[i][0] = out[order[i]][0] / w * 2.f - 1.f;
+            q.pos[i][1] = 1.f - out[order[i]][1] / h * 2.f;
         }
-        float u0 = sl.input.x / cw, v0 = sl.input.y / ch;
-        float u1 = (sl.input.x + sl.input.w) / cw, v1 = (sl.input.y + sl.input.h) / ch;
-        if (sl.flipH) std::swap(u0, u1);
-        if (sl.flipV) std::swap(v0, v1);
-        q.uv[0][0] = u0; q.uv[0][1] = v0;
-        q.uv[1][0] = u1; q.uv[1][1] = v0;
-        q.uv[2][0] = u0; q.uv[2][1] = v1;
-        q.uv[3][0] = u1; q.uv[3][1] = v1;
-        q.opacity = sl.opacity;
+        // píxel do alvo → (s,t) e (s,t) → UV na composição
+        Mat3 ho = inverse(squareToQuad(out));
+        Mat3 hi = squareToQuad(in);
+        for (int k = 0; k < 3; ++k) { hi.m[k] /= cw; hi.m[3 + k] /= ch; }
+        for (int k = 0; k < 9; ++k) { q.hOutInv[k] = (float)ho.m[k]; q.hIn[k] = (float)hi.m[k]; }
+
+        q.opacity = sl.opacity * s.opacity;
         q.brightness = sl.brightness + s.brightness;
+        q.adjust[0] = s.red; q.adjust[1] = s.green; q.adjust[2] = s.blue; q.adjust[3] = s.contrast;
         q.blend = Blend::Alpha;
         if (s.testPattern) {
-            q.ps = PSKind::Test;
+            q.ps = PSKind::WarpTest;
             unpackColor(sl.color, q.color);
-            q.aspect = sl.outW / sl.outH;
+            float ew = std::hypot(out[1][0] - out[0][0], out[1][1] - out[0][1]);
+            float eh = std::hypot(out[3][0] - out[0][0], out[3][1] - out[0][1]);
+            q.aspect = eh > 0 ? ew / eh : 1.f;
         } else {
-            q.ps = PSKind::RGBA;
+            q.ps = PSKind::Warp;
             q.srv0 = fromPreview ? m_prevRT.srv.Get() : sourceFor(sl.sourceLayer);
-            // recorte com o mesmo tamanho e sem rotação → píxel perfeito
-            q.pointSample = std::fabs(sl.input.w - sl.outW) < 0.01f && std::fabs(sl.input.h - sl.outH) < 0.01f &&
-                            std::fmod(std::fabs(sl.rotation), 360.f) < 0.01f && sx == 1.f && sy == 1.f;
+            // recorte com o mesmo tamanho, sem rotação nem pontos → píxel perfeito
+            q.pointSample = !sl.inWarp && !sl.outWarp && std::fabs(sl.input.w - sl.outW) < 0.01f &&
+                            std::fabs(sl.input.h - sl.outH) < 0.01f && std::fmod(std::fabs(sl.rotation), 360.f) < 0.01f &&
+                            sx == 1.f && sy == 1.f;
         }
         G.drawQuad(q);
     }

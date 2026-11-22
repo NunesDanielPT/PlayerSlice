@@ -1,6 +1,7 @@
 #include "core/Model.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
+#include <cmath>
 
 using nlohmann::json;
 
@@ -14,6 +15,32 @@ uint32_t paletteColor(int i) {
         0xFFC0A040, 0xFF4040A0,
     };
     return pal[i % (sizeof(pal) / sizeof(pal[0]))];
+}
+
+void Slice::inputQuad(float q[4][2]) const {
+    float r[4][2];
+    if (inWarp) { for (int i = 0; i < 4; ++i) { r[i][0] = inPts[i][0]; r[i][1] = inPts[i][1]; } }
+    else {
+        r[0][0] = input.x;           r[0][1] = input.y;
+        r[1][0] = input.x + input.w; r[1][1] = input.y;
+        r[2][0] = input.x + input.w; r[2][1] = input.y + input.h;
+        r[3][0] = input.x;           r[3][1] = input.y + input.h;
+    }
+    int idx[4] = {0, 1, 2, 3};
+    if (flipH) { std::swap(idx[0], idx[1]); std::swap(idx[2], idx[3]); }
+    if (flipV) { std::swap(idx[0], idx[3]); std::swap(idx[1], idx[2]); }
+    for (int i = 0; i < 4; ++i) { q[i][0] = r[idx[i]][0]; q[i][1] = r[idx[i]][1]; }
+}
+
+void Slice::outputQuad(float q[4][2]) const {
+    if (outWarp) { for (int i = 0; i < 4; ++i) { q[i][0] = outPts[i][0]; q[i][1] = outPts[i][1]; } return; }
+    float hw = outW * 0.5f, hh = outH * 0.5f;
+    float a = rotation * 3.14159265f / 180.f, cs = std::cos(a), sn = std::sin(a);
+    const float lx[4] = {-hw, hw, hw, -hw}, ly[4] = {-hh, -hh, hh, hh};
+    for (int i = 0; i < 4; ++i) {
+        q[i][0] = outX + lx[i] * cs - ly[i] * sn;
+        q[i][1] = outY + lx[i] * sn + ly[i] * cs;
+    }
 }
 
 Layer& Project::addLayer(const std::string& name) {
@@ -133,6 +160,8 @@ std::string Project::toJson() const {
         sj["id"] = s.id; sj["name"] = s.name; sj["device"] = (int)s.device;
         sj["monitor"] = s.monitorKey; sj["width"] = s.width; sj["height"] = s.height;
         sj["brightness"] = s.brightness; sj["testPattern"] = s.testPattern; sj["inToggle"] = s.inToggle;
+        sj["opacity"] = s.opacity; sj["contrast"] = s.contrast; sj["rgb"] = {s.red, s.green, s.blue};
+        sj["guide"] = s.guidePath; sj["guideOpacity"] = s.guideOpacity;
         sj["slices"] = json::array();
         for (auto& sl : s.slices) {
             json k;
@@ -141,6 +170,9 @@ std::string Project::toJson() const {
             k["out"] = {sl.outX, sl.outY, sl.outW, sl.outH};
             k["rotation"] = sl.rotation; k["flipH"] = sl.flipH; k["flipV"] = sl.flipV;
             k["opacity"] = sl.opacity; k["brightness"] = sl.brightness; k["color"] = sl.color;
+            auto pts = [](const float p[4][2]) { json a = json::array(); for (int i = 0; i < 4; ++i) a.push_back({p[i][0], p[i][1]}); return a; };
+            k["inWarp"] = sl.inWarp; k["inPts"] = pts(sl.inPts);
+            k["outWarp"] = sl.outWarp; k["outPts"] = pts(sl.outPts);
             sj["slices"].push_back(k);
         }
         j["screens"].push_back(sj);
@@ -189,6 +221,9 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             int d = 0; get(sj, "device", d); s.device = (ScreenDevice)d;
             get(sj, "monitor", s.monitorKey); get(sj, "width", s.width); get(sj, "height", s.height);
             get(sj, "brightness", s.brightness); get(sj, "testPattern", s.testPattern); get(sj, "inToggle", s.inToggle);
+            get(sj, "opacity", s.opacity); get(sj, "contrast", s.contrast);
+            if (sj.contains("rgb") && sj["rgb"].size() == 3) { s.red = sj["rgb"][0]; s.green = sj["rgb"][1]; s.blue = sj["rgb"][2]; }
+            get(sj, "guide", s.guidePath); get(sj, "guideOpacity", s.guideOpacity);
             for (auto& k : sj.value("slices", json::array())) {
                 Slice sl;
                 get(k, "id", sl.id); get(k, "name", sl.name); get(k, "enabled", sl.enabled);
@@ -197,6 +232,14 @@ bool Project::fromJson(const std::string& text, std::string* err) {
                 if (k.contains("out")) { auto& o = k["out"]; sl.outX = o[0]; sl.outY = o[1]; sl.outW = o[2]; sl.outH = o[3]; }
                 get(k, "rotation", sl.rotation); get(k, "flipH", sl.flipH); get(k, "flipV", sl.flipV);
                 get(k, "opacity", sl.opacity); get(k, "brightness", sl.brightness); get(k, "color", sl.color);
+                auto rdPts = [&](const char* key, float p[4][2]) {
+                    if (!k.contains(key) || !k[key].is_array() || k[key].size() != 4) return false;
+                    for (int i = 0; i < 4; ++i) { p[i][0] = k[key][i][0]; p[i][1] = k[key][i][1]; }
+                    return true;
+                };
+                get(k, "inWarp", sl.inWarp); get(k, "outWarp", sl.outWarp);
+                if (!rdPts("inPts", sl.inPts)) sl.inWarp = false;
+                if (!rdPts("outPts", sl.outPts)) sl.outWarp = false;
                 s.slices.push_back(sl);
             }
             p.screens.push_back(s);
