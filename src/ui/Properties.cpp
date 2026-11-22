@@ -13,15 +13,13 @@ namespace ps {
 
 void colorSwatches(App& app, uint32_t& target);   // ClipGrid.cpp
 
-// slider com - / + e duplo clique para repor (estilo Resolume)
+// valor com - / +: arrastar, duplo clique escreve, botão direito repõe (estilo Resolume)
 static bool param(App& app, const char* label, float* v, float lo, float hi, float def, const char* fmt) {
     ImGui::PushID(label);
     bool ch = false;
     float w = ImGui::CalcItemWidth();
     ImGui::SetNextItemWidth(std::max(60.f, w - 52));
-    ch |= ImGui::SliderFloat("##v", v, lo, hi, fmt);
-    undoOnActivate(app);
-    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { app.checkpoint(); *v = def; ch = true; }
+    ch |= valueSlider(app, "##v", v, lo, hi, def, fmt);
     float step = (hi - lo) / 100.f;
     ImGui::SameLine(0, 2);
     if (ImGui::SmallButton("-")) { app.checkpoint(); *v = std::clamp(*v - step, lo, hi); ch = true; }
@@ -29,6 +27,7 @@ static bool param(App& app, const char* label, float* v, float lo, float hi, flo
     if (ImGui::SmallButton("+")) { app.checkpoint(); *v = std::clamp(*v + step, lo, hi); ch = true; }
     ImGui::SameLine(0, 6);
     ImGui::TextUnformatted(label);
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { app.checkpoint(); *v = def; ch = true; app.markDirty(); }
     ImGui::PopID();
     return ch;
 }
@@ -233,6 +232,7 @@ void clipTransformControls(App& app, Clip& c) {
         const char* fits[] = {T("Esticar"), T("Caber (com barras)"), T("Preencher (cortar)"), T("Tamanho nativo")};
         int fm = (int)c.fit;
         if (ImGui::Combo(T("Encaixe"), &fm, fits, 4)) { app.checkpoint(); c.fit = (FitMode)fm; }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Esticar, Caber e Preencher só ficam diferentes quando a proporção do vídeo é diferente da composição (ex.: vídeo 16:9 numa composição 48:9). Tamanho nativo usa os píxeis reais do vídeo."));
         param(app, T("Posição X"), &c.offsetX, -(float)p.comp.width, (float)p.comp.width, 0, "%.0f");
         param(app, T("Posição Y"), &c.offsetY, -(float)p.comp.height, (float)p.comp.height, 0, "%.0f");
         param(app, T("Escala"), &c.scale, 0.01f, 4, 1, "%.3f");

@@ -373,9 +373,7 @@ void screenList(App& app) {
 // direita: propriedades
 // ---------------------------------------------------------------------------
 bool slider(App& app, const char* label, float* v, float lo, float hi, const char* fmt, const char* help) {
-    bool ch = ImGui::SliderFloat(label, v, lo, hi, fmt);
-    undoOnActivate(app);
-    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { app.checkpoint(); *v = (lo < 0 ? 0.f : hi); ch = true; }
+    bool ch = valueSlider(app, label, v, lo, hi, lo < 0 ? 0.f : hi, fmt);
     hint(help);
     return ch;
 }

@@ -270,6 +270,24 @@ void App::runAction(int a) {
     }
 }
 
+// nomes automáticos ("Coluna 3") acompanham o idioma da interface ("Column 3")
+void App::localizeDefaultNames() {
+    const bool en = language() == Lang::EN;
+    const char* from = en ? "Coluna " : "Column ";
+    const char* to   = en ? "Column " : "Coluna ";
+    const size_t fl = strlen(from);
+    auto fix = [&](std::vector<Column>& cols) {
+        for (auto& c : cols) {
+            if (c.name.size() <= fl || c.name.compare(0, fl, from) != 0) continue;
+            bool digits = true;
+            for (size_t k = fl; k < c.name.size(); ++k) if (!isdigit((unsigned char)c.name[k])) { digits = false; break; }
+            if (digits) c.name = to + c.name.substr(fl);
+        }
+    };
+    fix(project.comp.columns);
+    for (auto& s : project.comp.stacks) fix(s.columns);
+}
+
 void App::selectStack(int i) {
     if (i < 0 || i >= (int)project.comp.stacks.size() || i == project.comp.activeStack) return;
     project.switchStack(i);
@@ -281,7 +299,7 @@ void App::selectStack(int i) {
 
 void App::newStack(bool duplicate) {
     checkpoint();
-    std::string name = duplicate ? project.comp.stacks[project.comp.activeStack].name + " (cópia)"
+    std::string name = duplicate ? project.comp.stacks[project.comp.activeStack].name + T(" (cópia)")
                                  : "Stack " + std::to_string(project.comp.stacks.size() + 1);
     project.addStack(name, duplicate);
     ui.selCells.clear();
@@ -609,6 +627,7 @@ void App::frame() {
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
         m_inUi = true;
+        localizeDefaultNames();
         drawUI(*this);
         m_inUi = false;
         ImGui::Render();

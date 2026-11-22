@@ -237,6 +237,11 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.5.1", {
+            "Valores (posição, escala, opacidade...): o número fica sempre legível; arrasta para mudar, duplo clique para escrever o valor com o teclado, botão direito para repor o valor por defeito.",
+            "Nomes automáticos das colunas acompanham o idioma (Coluna 1 / Column 1).",
+            "Ajuda no Encaixe: Esticar, Caber e Preencher só diferem quando a proporção do vídeo é diferente da composição.",
+        }},
         {"0.5.0", {
             "STACKS: o painel Clips passa a chamar-se Stack e podes criar várias (Stack 1, Stack 2...), cada uma com as suas colunas e clips. As layers são partilhadas.",
             "Mudar de stack não corta o que está no ar: os clips continuam a tocar até dispares outro.",

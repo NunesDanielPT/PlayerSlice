@@ -36,6 +36,9 @@ bool  inputTextStd(const char* label, std::string& s, float width = -1);
 bool  rectEditor(App& app, const char* id, Rect& r, float maxW, float maxH);
 // chamar depois de um widget: grava undo quando a edição começa
 void  undoOnActivate(App& app);
+// valor numérico estilo Resolume: arrastar para mudar, duplo clique (ou Ctrl+clique) para escrever,
+// botão direito para repor o valor por defeito. Barra fina em baixo mostra a posição.
+bool  valueSlider(App& app, const char* label, float* v, float lo, float hi, float def, const char* fmt);
 
 namespace col {
     constexpr ImU32 Accent     = IM_COL32(64, 224, 192, 255);   // turquesa

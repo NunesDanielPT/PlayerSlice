@@ -93,7 +93,8 @@ public:
     void setAllOutputs(bool on);
     void setOutput(uint32_t id, bool on);
     void runAction(int action);    // Action (Settings.h)
-    void selectStack(int i);       // muda a stack visível (os clips no ar continuam)
+    void selectStack(int i);
+    void localizeDefaultNames();       // muda a stack visível (os clips no ar continuam)
     void newStack(bool duplicate);
     void applyLanguage();
     void applyPerformance();

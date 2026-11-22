@@ -1,6 +1,11 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Valores (posição, escala, opacidade...): o número fica sempre legível; arrasta para mudar, duplo clique para escrever o valor com o teclado, botão direito para repor o valor por defeito.':'Values (position, scale, opacity...): the number is always readable; drag to change, double-click to type the value, right-click to reset to default.',
+'Nomes automáticos das colunas acompanham o idioma (Coluna 1 / Column 1).':'Automatic column names follow the language (Coluna 1 / Column 1).',
+'Ajuda no Encaixe: Esticar, Caber e Preencher só diferem quando a proporção do vídeo é diferente da composição.':'Fit mode help: Stretch, Fit and Fill only differ when the video aspect ratio differs from the composition.',
+'Esticar, Caber e Preencher só ficam diferentes quando a proporção do vídeo é diferente da composição (ex.: vídeo 16:9 numa composição 48:9). Tamanho nativo usa os píxeis reais do vídeo.':"Stretch, Fit and Fill only look different when the video aspect ratio differs from the composition (e.g. a 16:9 video in a 48:9 composition). Native size uses the video's real pixels.",
+'Arrastar = mudar  ·  duplo clique = escrever o valor  ·  botão direito = repor':'Drag = change  ·  double-click = type value  ·  right-click = reset',
 'Botão Janela grande: abre uma janela grande para transformar com precisão, com os valores ao lado (pode ir para outro monitor).':'Large window button: opens a large window to transform precisely, with the values on the side (can go to another monitor).',
 'Stack anterior':'Previous stack',
 'Stack seguinte':'Next stack',

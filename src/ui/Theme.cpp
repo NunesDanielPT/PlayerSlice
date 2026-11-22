@@ -3,6 +3,10 @@
 #include <imgui.h>
 #include <windows.h>
 #include <cstdio>
+#include <cstring>
+#include <algorithm>
+#include <imgui_internal.h>
+#include "core/I18n.h"
 
 namespace ps {
 
@@ -15,6 +19,42 @@ ImU32 sliceColorU32(uint32_t c, int alpha) {
 void undoOnActivate(App& app) {
     if (ImGui::IsItemActivated()) app.checkpoint();
     if (ImGui::IsItemDeactivatedAfterEdit()) app.markDirty();
+}
+
+bool valueSlider(App& app, const char* label, float* v, float lo, float hi, float def, const char* fmt) {
+    ImGuiIO& io = ImGui::GetIO();
+    float range = std::max(1e-6f, hi - lo);
+    float w = ImGui::CalcItemWidth();
+    float speed = range / std::max(100.f, w * 1.5f);   // arrastar a largura toda ≈ 2/3 do intervalo
+    bool ch = ImGui::DragFloat(label, v, speed, lo, hi, fmt, ImGuiSliderFlags_AlwaysClamp);
+    undoOnActivate(app);
+    const bool hov = ImGui::IsItemHovered();
+    if (hov && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { app.checkpoint(); *v = def; ch = true; app.markDirty(); }
+    // barra de posição (do zero, se o intervalo tiver negativos)
+    ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+    ImGuiStyle& st = ImGui::GetStyle();
+    float x1 = b.x;
+    if (label[0] && !(label[0] == '#' && label[1] == '#')) {
+        // label visível à direita: a moldura acaba antes do texto
+        const char* end = strstr(label, "##");
+        float tw = ImGui::CalcTextSize(label, end).x;
+        if (tw > 0) x1 = b.x - tw - st.ItemInnerSpacing.x;
+    }
+    float fw = x1 - a.x;
+    if (fw > 8) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float t = std::clamp((*v - lo) / range, 0.f, 1.f);
+        float z = (lo < 0 && hi > 0) ? (-lo / range) : 0.f;
+        float y0 = b.y - 3.f, y1 = b.y - 1.f;
+        dl->AddRectFilled(ImVec2(a.x + 2, y0), ImVec2(x1 - 2, y1), IM_COL32(255, 255, 255, 22));
+        float p0 = a.x + 2 + (fw - 4) * std::min(t, z), p1 = a.x + 2 + (fw - 4) * std::max(t, z);
+        if (p1 - p0 < 2) { p0 -= 1; p1 += 1; }
+        dl->AddRectFilled(ImVec2(p0, y0), ImVec2(p1, y1), IM_COL32(64, 224, 192, 255));
+    }
+    if (hov && !ImGui::IsItemActive() && ImGui::GetCurrentContext()->HoveredIdTimer > 0.8f)
+        ImGui::SetTooltip("%s", T("Arrastar = mudar  ·  duplo clique = escrever o valor  ·  botão direito = repor"));
+    (void)io;
+    return ch;
 }
 
 bool inputTextStd(const char* label, std::string& s, float width) {

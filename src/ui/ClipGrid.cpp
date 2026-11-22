@@ -317,8 +317,7 @@ static void layerHeader(App& app, int li, float rowH) {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Solo"));
     ImGui::SameLine(0, 6);
     ImGui::SetNextItemWidth(std::max(40.f, w - (bs + 3) * 3 - 18));
-    ImGui::SliderFloat("##op", &l.opacity, 0, 1, "%.2f");
-    undoOnActivate(app);
+    valueSlider(app, "##op", &l.opacity, 0, 1, 1, "%.2f");
 
     ImGui::SetCursorScreenPos(ImVec2(p0.x + 8, p0.y + 54));
     const char* blends[] = {"Normal", "Add", "Multiply", "Screen"};
