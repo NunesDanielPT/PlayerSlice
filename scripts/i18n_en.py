@@ -183,6 +183,9 @@ EN = {
 'Adiciona um ecrã com o botão +.':'Add a screen with the + button.','Desfaz tudo o que foi alterado desde que esta janela abriu.':'Undoes everything changed since this window opened.',
 'Gravar e fechar':'Save & close','Saída avançada':'Advanced output','Sem ecrãs. Cria um em Saídas → Saída avançada.':'No screens. Create one in Outputs → Advanced output.',
 'Correção: \\"Procurar atualizações\\" dava erro quando a release não tinha texto.':'Fix: \\"Check for updates\\" failed when the release had no description.',
+'Larga os vídeos em cima de uma célula ou do nome de uma layer.':'Drop the videos onto a cell or onto a layer name.',
+'Correção: arrastar vídeos do Explorador para a grelha não funcionava quando a app abria como administrador (depois de instalar/atualizar).':'Fix: dragging videos from Explorer onto the grid did not work when the app was started as administrator (after installing/updating).',
+'Largar vídeos ou clips em cima do nome de uma layer põe-nos na primeira célula livre dessa layer.':'Dropping videos or clips onto a layer name puts them in the first free cell of that layer.',
 'Saída avançada...':'Advanced output...',
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }

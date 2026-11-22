@@ -2,6 +2,7 @@
 #include "core/I18n.h"
 #include "app/App.h"
 #include "video/Thumbnail.h"
+#include "core/Log.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
@@ -31,6 +32,14 @@ static void assignClip(App& app, int li, int col, const std::string& path) {
 }
 
 struct CellPayload { int layer, col; };
+
+// primeira coluna livre da layer (cria uma coluna nova se estiverem todas ocupadas)
+static int firstFreeColumn(Project& p, int li) {
+    Layer& l = p.comp.layers[li];
+    for (int c = 0; c < (int)l.clips.size(); ++c) if (l.clips[c].empty()) return c;
+    p.ensureColumns((int)p.comp.columns.size() + 1);
+    return (int)p.comp.columns.size() - 1;
+}
 
 static void layerHeader(App& app, int li, float rowH) {
     Project& p = app.project;
@@ -80,6 +89,23 @@ static void layerHeader(App& app, int li, float rowH) {
     // menu de contexto
     ImGui::SetCursorScreenPos(p0);
     ImGui::InvisibleButton("##ctx", ImVec2(w, rowH - 2), ImGuiButtonFlags_MouseButtonRight);
+    // largar ficheiros do Explorador ou clips em cima do nome da layer → primeira célula livre
+    app.ui.cells.push_back({li, -1, p0.x, p0.y, p0.x + w, p0.y + rowH - 2});
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_CLIP")) {
+            CellPayload src = *(const CellPayload*)pl->Data;
+            if (src.layer != li) {
+                app.checkpoint();
+                int dc = firstFreeColumn(p, li);
+                Clip& from = p.comp.layers[src.layer].clips[src.col];
+                Clip& to = p.comp.layers[li].clips[dc];
+                if (ImGui::GetIO().KeyCtrl) { to = from; to.id = p.newId(); }
+                else { to = from; from = Clip{}; }
+                app.ui.selLayer = li; app.ui.selColumn = dc;
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
     if (ImGui::BeginPopupContextItem("layerctx")) {
         app.ui.selLayer = li;
         if (ImGui::MenuItem(T("Adicionar layer acima"))) {
@@ -326,10 +352,18 @@ void drawClipGrid(App& app) {
         for (auto& cell : app.ui.cells) {
             if (app.dropX >= cell.x0 && app.dropX < cell.x1 && app.dropY >= cell.y0 && app.dropY < cell.y1) {
                 app.checkpoint();
-                for (size_t i = 0; i < app.pendingDrops.size(); ++i) assignClip(app, cell.layer, cell.column + (int)i, app.pendingDrops[i]);
-                app.ui.selLayer = cell.layer; app.ui.selColumn = cell.column;
+                int col = cell.column >= 0 ? cell.column : firstFreeColumn(p, cell.layer);
+                for (size_t i = 0; i < app.pendingDrops.size(); ++i) assignClip(app, cell.layer, col + (int)i, app.pendingDrops[i]);
+                app.ui.selLayer = cell.layer; app.ui.selColumn = col;
+                PS_INFO("%d ficheiro(s) largado(s) na layer %d, coluna %d", (int)app.pendingDrops.size(), cell.layer + 1, col + 1);
                 break;
             }
+        }
+        if (!app.pendingDrops.empty()) {
+            bool placed = false;
+            for (auto& cell : app.ui.cells)
+                if (app.dropX >= cell.x0 && app.dropX < cell.x1 && app.dropY >= cell.y0 && app.dropY < cell.y1) placed = true;
+            if (!placed) PS_WARN("%s", T("Larga os vídeos em cima de uma célula ou do nome de uma layer."));
         }
         app.pendingDrops.clear();
     }

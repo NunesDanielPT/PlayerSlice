@@ -1,7 +1,7 @@
 ; Instalador do PLAYERSLICE (Inno Setup 6)
 #define AppName "PLAYERSLICE"
 #ifndef AppVersion
-  #define AppVersion "0.3.1"
+  #define AppVersion "0.3.2"
 #endif
 
 [Setup]
@@ -56,6 +56,6 @@ Root: HKA; Subkey: "Software\Classes\PLAYERSLICE.Project\shell\open\command"; Va
 Filename: "{app}\playerslice.ini"; Section: "General"; Key: "Language"; String: "{language}"
 
 [Run]
-Filename: "{app}\PLAYERSLICE.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\PLAYERSLICE.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 ; atualização automática (modo silencioso): voltar a abrir a app
-Filename: "{app}\PLAYERSLICE.exe"; Flags: nowait; Check: WizardSilent
+Filename: "{app}\PLAYERSLICE.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent

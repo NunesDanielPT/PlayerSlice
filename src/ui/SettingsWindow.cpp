@@ -151,6 +151,10 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.3.2", {
+            "Correção: arrastar vídeos do Explorador para a grelha não funcionava quando a app abria como administrador (depois de instalar/atualizar).",
+            "Largar vídeos ou clips em cima do nome de uma layer põe-nos na primeira célula livre dessa layer.",
+        }},
         {"0.3.1", {
             "Correção: \"Procurar atualizações\" dava erro quando a release não tinha texto.",
         }},

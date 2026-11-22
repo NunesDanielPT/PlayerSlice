@@ -310,6 +310,10 @@ bool App::initWindow(HINSTANCE inst) {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(m_hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &dark, sizeof(dark));
     DragAcceptFiles(m_hwnd, TRUE);
+    // se a app correr como administrador, o Windows bloqueia o arrastar a partir do Explorador
+    ChangeWindowMessageFilterEx(m_hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr);
+    ChangeWindowMessageFilterEx(m_hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
+    ChangeWindowMessageFilterEx(m_hwnd, 0x0049 /*WM_COPYGLOBALDATA*/, MSGFLT_ALLOW, nullptr);
     ShowWindow(m_hwnd, SW_SHOWMAXIMIZED);
     UpdateWindow(m_hwnd);
     return true;
