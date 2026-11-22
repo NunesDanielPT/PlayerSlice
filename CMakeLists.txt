@@ -25,6 +25,8 @@ endif()
 # com -DFETCHCONTENT_SOURCE_DIR_IMGUI=... etc.)
 # ---------------------------------------------------------------------------
 include(FetchContent)
+# CMake 4 recusa projetos com cmake_minimum_required antigo (snappy)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_Declare(imgui  GIT_REPOSITORY https://github.com/ocornut/imgui.git  GIT_TAG 33d9ed0d6bdeaf2fdd1636b72d68c268e851033f)
 FetchContent_Declare(hap    GIT_REPOSITORY https://github.com/Vidvox/hap.git     GIT_TAG d847f6bbd3be88575dd4ef33a877243780e3be76)
 FetchContent_Declare(snappy GIT_REPOSITORY https://github.com/google/snappy.git  GIT_TAG 1.2.1   GIT_SHALLOW TRUE)
