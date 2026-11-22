@@ -24,6 +24,11 @@ const RenderTarget* Compositor::screenRT(uint32_t id) const {
     return it == m_screenRT.end() || !it->second.valid() ? nullptr : &it->second;
 }
 
+const Clip* Compositor::activeClip(uint32_t id) const {
+    auto it = m_layers.find(id);
+    return it != m_layers.end() && it->second.cur ? &it->second.curClip : nullptr;
+}
+
 void Compositor::trigger(Project& p, int li, int column) {
     if (li < 0 || li >= (int)p.comp.layers.size()) return;
     Layer& l = p.comp.layers[li];
@@ -33,7 +38,7 @@ void Compositor::trigger(Project& p, int li, int column) {
     LayerRuntime& rt = m_layers[l.id];
 
     // clicar no clip que já está a tocar → recomeça
-    if (rt.cur && rt.column == column && rt.curClip.path == c.path) {
+    if (rt.cur && rt.column == column && rt.stack == p.comp.activeStack && rt.curClip.path == c.path) {
         rt.cur->restart();
         return;
     }
@@ -43,6 +48,7 @@ void Compositor::trigger(Project& p, int li, int column) {
     rt.cur = std::make_unique<VideoPlayer>(c.path, c.loop, c.speed);
     rt.curClip = c;
     rt.column = column;
+    rt.stack = p.comp.activeStack;
     rt.fadeDur = l.fadeTime;
     rt.fadeStart = -1; // começa quando o novo clip tiver o 1º frame
     l.activeColumn = column;
@@ -53,12 +59,13 @@ void Compositor::previewClip(Project& p, int li, int column) {
     const Layer& l = p.comp.layers[li];
     if (column < 0 || column >= (int)l.clips.size() || l.clips[column].empty()) return;
     const Clip& c = l.clips[column];
-    if (m_prev && m_prevLayerId == l.id && m_prevCol == column && m_prevClip.path == c.path) { m_prev->restart(); return; }
+    if (m_prev && m_prevLayerId == l.id && m_prevCol == column && m_prevStack == p.comp.activeStack && m_prevClip.path == c.path) { m_prev->restart(); return; }
     VideoPlayer::destroyAsync(std::move(m_prev));
     m_prev = std::make_unique<VideoPlayer>(c.path, c.loop == LoopMode::PlayOnceClear ? LoopMode::PlayOnceHold : c.loop, c.speed);
     m_prevClip = c;
     m_prevLayerId = l.id;
     m_prevCol = column;
+    m_prevStack = p.comp.activeStack;
 }
 
 void Compositor::clearPreview() {
@@ -81,9 +88,10 @@ void Compositor::takePreview(Project& p) {
     rt.cur = std::move(m_prev);
     rt.curClip = m_prevClip;
     rt.column = m_prevCol;
+    rt.stack = m_prevStack;
     rt.fadeDur = l.fadeTime;
     rt.fadeStart = -1;
-    l.activeColumn = m_prevCol;
+    l.activeColumn = m_prevStack == p.comp.activeStack ? m_prevCol : -1;
     m_prevLayerId = 0;
     m_prevCol = -1;
 }
@@ -111,7 +119,7 @@ void Compositor::stopLayer(Project& p, int li) {
         VideoPlayer::destroyAsync(std::move(it->second.prev));
         m_layers.erase(it);
     }
-    l.activeColumn = -1;
+    l.activeColumn = -1; l.playing = false;
 }
 
 void Compositor::stopAll(Project& p) {
@@ -128,7 +136,7 @@ void Compositor::remapColumns(Project& p, const std::function<int(int)>& map) {
         auto it = m_layers.find(l.id);
         if (it == m_layers.end()) continue;
         LayerRuntime& rt = it->second;
-        if (rt.column < 0) continue;
+        if (rt.column < 0 || rt.stack != p.comp.activeStack) continue;   // só a stack visível muda
         int nc = map(rt.column);
         if (nc < 0) {
             VideoPlayer::destroyAsync(std::move(rt.cur));
@@ -140,7 +148,7 @@ void Compositor::remapColumns(Project& p, const std::function<int(int)>& map) {
             l.activeColumn = nc;
         }
     }
-    if (m_prev && m_prevCol >= 0) {
+    if (m_prev && m_prevCol >= 0 && m_prevStack == p.comp.activeStack) {
         int nc = map(m_prevCol);
         if (nc < 0) clearPreview(); else m_prevCol = nc;
     }
@@ -163,7 +171,7 @@ void Compositor::update(Project& p, double now) {
         if (!ids.count(m_prevLayerId)) clearPreview();
         else {
             int li = p.layerIndex(m_prevLayerId);
-            if (li >= 0 && m_prevCol >= 0 && m_prevCol < (int)p.comp.layers[li].clips.size() &&
+            if (li >= 0 && m_prevStack == p.comp.activeStack && m_prevCol >= 0 && m_prevCol < (int)p.comp.layers[li].clips.size() &&
                 p.comp.layers[li].clips[m_prevCol].path == m_prevClip.path) {
                 const Clip& c = p.comp.layers[li].clips[m_prevCol];
                 if (c.speed != m_prevClip.speed) m_prev->setSpeed(c.speed);
@@ -175,10 +183,10 @@ void Compositor::update(Project& p, double now) {
 
     for (auto& l : p.comp.layers) {
         auto it = m_layers.find(l.id);
-        if (it == m_layers.end()) { l.activeColumn = -1; continue; }
+        if (it == m_layers.end()) { l.activeColumn = -1; l.playing = false; continue; }
         LayerRuntime& rt = it->second;
         // propriedades editadas em direto
-        if (rt.column >= 0 && rt.column < (int)l.clips.size() && l.clips[rt.column].path == rt.curClip.path) {
+        if (rt.stack == p.comp.activeStack && rt.column >= 0 && rt.column < (int)l.clips.size() && l.clips[rt.column].path == rt.curClip.path) {
             const Clip& c = l.clips[rt.column];
             if (c.speed != rt.curClip.speed && rt.cur) rt.cur->setSpeed(c.speed);
             if (c.loop != rt.curClip.loop && rt.cur) rt.cur->setLoop(c.loop);
@@ -197,7 +205,8 @@ void Compositor::update(Project& p, double now) {
             VideoPlayer::destroyAsync(std::move(rt.cur));
             rt.column = -1;
         }
-        l.activeColumn = rt.cur ? rt.column : -1;
+        l.playing = rt.cur != nullptr;
+        l.activeColumn = rt.cur && rt.stack == p.comp.activeStack ? rt.column : -1;
     }
 }
 

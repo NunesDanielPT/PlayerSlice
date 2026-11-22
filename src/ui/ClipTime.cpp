@@ -41,11 +41,12 @@ std::string fmtTime(double s, double fps, bool negative) {
 // tempo do clip que está a tocar numa layer
 bool layerTime(App& app, const Layer& l, CTItem& it) {
     VideoPlayer* v = app.comp.activePlayer(l.id);
-    if (!v || l.activeColumn < 0 || l.activeColumn >= (int)l.clips.size()) return false;
+    const Clip* cl = app.comp.activeClip(l.id);
+    if (!v || !cl) return false;
     MediaInfo mi = v->info();
     if (mi.duration <= 0) { it.time = "--:--:--.--"; it.live = true; return true; }
     double pos = std::fmod(std::max(0.0, v->position()), mi.duration);
-    float speed = std::max(0.01f, l.clips[l.activeColumn].speed);
+    float speed = std::max(0.01f, cl->speed);
     it.remaining = (mi.duration - pos) / speed;
     it.time = fmtTime(it.remaining, mi.fps, true);
     it.progress = (float)(pos / mi.duration);
@@ -60,7 +61,7 @@ std::vector<CTItem> gather(App& app, bool forWeb) {
     auto layerLabel = [&](int li) {
         const Layer& l = p.comp.layers[li];
         std::string n = l.name;
-        if (l.activeColumn >= 0 && l.activeColumn < (int)l.clips.size()) n += " - " + l.clips[l.activeColumn].name;
+        if (const Clip* cl = app.comp.activeClip(l.id)) n += " - " + cl->name;
         return n;
     };
     if (app.ui.ctSystem) {

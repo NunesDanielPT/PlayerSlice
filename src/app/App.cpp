@@ -261,10 +261,31 @@ void App::runAction(int a) {
     case Action::OutputEditor:  ui.focusEditor = true; break;
     case Action::TakePreview:   comp.takePreview(project); break;
     case Action::ClearPreview:  comp.clearPreview(); break;
+    case Action::PrevStack:     selectStack(project.comp.activeStack - 1); break;
+    case Action::NextStack:     selectStack(project.comp.activeStack + 1); break;
+    case Action::NewStack:      newStack(false); break;
     default:
         if (a >= (int)Action::Column1 && a <= (int)Action::Column9) comp.triggerColumn(project, a - (int)Action::Column1);
         break;
     }
+}
+
+void App::selectStack(int i) {
+    if (i < 0 || i >= (int)project.comp.stacks.size() || i == project.comp.activeStack) return;
+    project.switchStack(i);
+    ui.selCells.clear();
+    ui.selColumn = std::min(ui.selColumn, (int)project.comp.columns.size() - 1);
+    ui.selColumnProp = std::min(ui.selColumnProp, (int)project.comp.columns.size() - 1);
+    dirty = true;
+}
+
+void App::newStack(bool duplicate) {
+    checkpoint();
+    std::string name = duplicate ? project.comp.stacks[project.comp.activeStack].name + " (cópia)"
+                                 : "Stack " + std::to_string(project.comp.stacks.size() + 1);
+    project.addStack(name, duplicate);
+    ui.selCells.clear();
+    dirty = true;
 }
 
 void App::applyPerformance() {
@@ -301,6 +322,9 @@ void App::handleOsc() {
         const bool press = v > 0.5f;
         if (a.size() >= 2 && a[0] == "composition") {
             if (a[1] == "disconnectall") { if (press) comp.stopAll(p); }
+            else if (a[1] == "decks" && a.size() >= 4 && a[3] == "select") { if (press) selectStack(num(2) - 1); }
+            else if (a[1] == "selectnextdeck") { if (press) selectStack(p.comp.activeStack + 1); }
+            else if (a[1] == "selectprevdeck") { if (press) selectStack(p.comp.activeStack - 1); }
             else if (a[1] == "columns" && a.size() >= 4) {
                 int c = num(2) - 1;
                 if (c >= 0 && c < (int)p.comp.columns.size()) {
@@ -647,6 +671,10 @@ int App::run(HINSTANCE inst) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_ViewportsEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;   // arrastar dentro dos monitores não move a janela
     io.ConfigDebugHighlightIdConflicts = false;
+    // painéis soltos pertencem à janela principal: sem ícone próprio na barra de tarefas,
+    // minimizam e ficam sempre à frente da janela principal
+    io.ConfigViewportsNoTaskBarIcon = true;
+    io.ConfigViewportsNoDefaultParent = false;
     static std::string iniPath = toUtf8(dir + L"\\layout-v2.ini");
     io.IniFilename = iniPath.c_str();
     ImGui_ImplWin32_Init(m_hwnd);

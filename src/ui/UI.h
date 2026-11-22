@@ -13,6 +13,7 @@ void drawUI(App& app);
 void drawClipGrid(App& app);
 void drawSliceEditor(App& app);
 void drawProperties(App& app);
+void clipTransformControls(App& app, struct Clip& c);
 void drawSettings(App& app);
 void drawUpdateStatus(App& app, bool compact);
 void drawUpdatePopup(App& app);

@@ -37,7 +37,7 @@ static json uiStateJson(App& app) {
     for (auto& m : app.ui.extraMonitors)
         j["monitors"].push_back({{"id", m.id}, {"preview", m.preview}, {"mode", m.mode}, {"view", m.viewId}});
     j["nextMonitorId"] = app.ui.nextMonitorId;
-    j["main"] = {{"m0", app.ui.viewMode[0]}, {"v0", app.ui.viewId[0]}, {"m1", app.ui.viewMode[1]}, {"v1", app.ui.viewId[1]}};
+    j["main"] = {{"m0", app.ui.viewMode[0]}, {"v0", app.ui.viewId[0]}, {"m1", app.ui.viewMode[1]}, {"v1", app.ui.viewId[1]}, {"split", app.ui.monSplit}};
     return j;
 }
 
@@ -71,6 +71,7 @@ static void applyUiState(App& app, const json& j) {
         auto& m = j["main"];
         app.ui.viewMode[0] = m.value("m0", 0); app.ui.viewId[0] = m.value("v0", 0u);
         app.ui.viewMode[1] = m.value("m1", 0); app.ui.viewId[1] = m.value("v1", 0u);
+        app.ui.monSplit = std::clamp(m.value("split", 0.5f), 0.15f, 0.85f);
     }
 }
 
@@ -113,7 +114,7 @@ void drawLayoutMenu(App& app) {
     static bool askName = false;
     if (ImGui::BeginMenu(T("Layout"))) {
         ImGui::SeparatorText(T("Painéis"));
-        ImGui::MenuItem(T("Clips"), nullptr, &pn.clips);
+        ImGui::MenuItem(T("Stack"), nullptr, &pn.clips);
         ImGui::MenuItem(T("Preview / Programa"), nullptr, &pn.monitors);
         ImGui::MenuItem(T("Monitor de saídas"), nullptr, &pn.outputs);
         ImGui::MenuItem(T("Efeitos"), nullptr, &pn.effects);

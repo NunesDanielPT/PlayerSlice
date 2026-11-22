@@ -21,6 +21,7 @@ enum class Action : int {
     TakePreview,
     ClearPreview,
     Column1, Column2, Column3, Column4, Column5, Column6, Column7, Column8, Column9,
+    PrevStack, NextStack, NewStack,
     Count
 };
 

@@ -14,6 +14,7 @@ struct LayerRuntime {
     std::unique_ptr<VideoPlayer> cur, prev;
     Clip   curClip, prevClip;
     int    column = -1;
+    int    stack = 0;           // stack de onde veio o clip (continua a tocar ao mudar de stack)
     double fadeStart = 0, fadeDur = 0;
 };
 
@@ -34,6 +35,8 @@ public:
     bool hasPreview() const { return m_prev != nullptr; }
     uint32_t previewLayerId() const { return m_prevLayerId; }
     int previewColumn() const { return m_prevCol; }
+    int previewStack() const { return m_prevStack; }
+    const Clip* activeClip(uint32_t layerId) const;   // clip no programa (de qualquer stack)
     const Clip& previewClipInfo() const { return m_prevClip; }
     VideoPlayer* previewPlayer() const { return m_prev.get(); }
     const RenderTarget& previewRT() const { return m_prevRT; }
@@ -76,6 +79,7 @@ private:
     Clip     m_prevClip;
     uint32_t m_prevLayerId = 0;
     int      m_prevCol = -1;
+    int      m_prevStack = 0;
     RenderTarget m_prevRT;
     std::map<uint32_t, RenderTarget> m_prevScreenRT;
     std::set<uint32_t> m_prevScreenReq, m_prevScreenActive;

@@ -63,6 +63,73 @@ void Project::ensureColumns(int n) {
         if ((int)l.clips.size() < (int)comp.columns.size()) l.clips.resize(comp.columns.size());
 }
 
+void Project::storeActiveStack() {
+    if (comp.stacks.empty()) comp.stacks.push_back(Stack{"Stack 1"});
+    comp.activeStack = std::clamp(comp.activeStack, 0, (int)comp.stacks.size() - 1);
+    Stack& s = comp.stacks[comp.activeStack];
+    s.columns = comp.columns;
+    s.clips.clear();
+    for (auto& l : comp.layers) s.clips[l.id] = l.clips;
+}
+
+static void loadStack(Project& p, const Stack& s) {
+    p.comp.columns = s.columns;
+    for (auto& l : p.comp.layers) {
+        auto it = s.clips.find(l.id);
+        l.clips = it != s.clips.end() ? it->second : std::vector<Clip>{};
+    }
+    p.ensureColumns(std::max<int>(1, (int)p.comp.columns.size()));
+    for (auto& l : p.comp.layers) l.clips.resize(p.comp.columns.size());
+}
+
+void Project::switchStack(int i) {
+    if (i < 0 || i >= (int)comp.stacks.size() || i == comp.activeStack) return;
+    storeActiveStack();
+    comp.activeStack = i;
+    loadStack(*this, comp.stacks[i]);
+}
+
+int Project::addStack(const std::string& name, bool duplicateActive) {
+    storeActiveStack();
+    Stack s;
+    if (duplicateActive) {
+        s = comp.stacks[comp.activeStack];
+        for (auto& [id, v] : s.clips) for (auto& c : v) if (!c.empty()) c.id = newId();
+    } else {
+        int n = std::max<int>(1, (int)comp.columns.size());
+        for (int i = 0; i < n; ++i) s.columns.push_back(Column{"Coluna " + std::to_string(i + 1), 0});
+    }
+    s.name = name;
+    comp.stacks.insert(comp.stacks.begin() + comp.activeStack + 1, s);
+    int idx = comp.activeStack + 1;
+    comp.activeStack = idx;          // os dados em uso ainda são da stack anterior, já guardados
+    loadStack(*this, comp.stacks[idx]);
+    return idx;
+}
+
+void Project::removeStack(int i) {
+    if (comp.stacks.size() <= 1 || i < 0 || i >= (int)comp.stacks.size()) return;
+    storeActiveStack();
+    comp.stacks.erase(comp.stacks.begin() + i);
+    if (comp.activeStack >= i && comp.activeStack > 0) comp.activeStack--;
+    comp.activeStack = std::clamp(comp.activeStack, 0, (int)comp.stacks.size() - 1);
+    loadStack(*this, comp.stacks[comp.activeStack]);
+}
+
+void Project::moveStack(int from, int to) {
+    int n = (int)comp.stacks.size();
+    if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
+    storeActiveStack();
+    Stack s = comp.stacks[from];
+    comp.stacks.erase(comp.stacks.begin() + from);
+    comp.stacks.insert(comp.stacks.begin() + to, s);
+    int a = comp.activeStack;
+    if (a == from) a = to;
+    else if (from < a && to >= a) a--;
+    else if (from > a && to <= a) a++;
+    comp.activeStack = a;
+}
+
 Screen& Project::addScreen(const std::string& name) {
     Screen s;
     s.id = newId();
@@ -150,6 +217,23 @@ static Rect rectFrom(const json& j) {
     return r;
 }
 
+static json clipJ(const Clip& cl) {
+    json cj;
+    if (!cl.empty()) {
+        cj["id"] = cl.id; cj["path"] = cl.path; cj["name"] = cl.name;
+        cj["loop"] = (int)cl.loop; cj["speed"] = cl.speed; cj["opacity"] = cl.opacity;
+        cj["fit"] = (int)cl.fit; cj["offset"] = {cl.offsetX, cl.offsetY}; cj["scale"] = cl.scale;
+        cj["rotation"] = cl.rotation; cj["flipH"] = cl.flipH; cj["flipV"] = cl.flipV; cj["effects"] = fxJ(cl.effects);
+        cj["stretch"] = {cl.scaleX, cl.scaleY};
+    }
+    return cj;
+}
+static json columnsJ(const std::vector<Column>& cols) {
+    json a = json::array();
+    for (auto& col : cols) a.push_back({{"name", col.name}, {"color", col.color}});
+    return a;
+}
+
 std::string Project::toJson() const {
     json j;
     j["app"] = "PLAYERSLICE";
@@ -159,8 +243,7 @@ std::string Project::toJson() const {
     c["name"] = comp.name; c["description"] = comp.description;
     c["width"] = comp.width; c["height"] = comp.height; c["fps"] = comp.fps;
     c["colorDepth"] = comp.colorDepth; c["master"] = comp.master; c["effects"] = fxJ(comp.effects);
-    c["columns"] = json::array();
-    for (auto& col : comp.columns) c["columns"].push_back({{"name", col.name}, {"color", col.color}});
+    c["columns"] = columnsJ(comp.columns);     // stack ativa (também lida por versões antigas)
     c["layers"] = json::array();
     for (auto& l : comp.layers) {
         json lj;
@@ -171,18 +254,25 @@ std::string Project::toJson() const {
         lj["color"] = l.color; lj["ignoreColumn"] = l.ignoreColumn;
         lj["transform"] = {l.posX, l.posY, l.scale, l.rotation}; lj["effects"] = fxJ(l.effects);
         lj["clips"] = json::array();
-        for (auto& cl : l.clips) {
-            json cj;
-            if (!cl.empty()) {
-                cj["id"] = cl.id; cj["path"] = cl.path; cj["name"] = cl.name;
-                cj["loop"] = (int)cl.loop; cj["speed"] = cl.speed; cj["opacity"] = cl.opacity;
-                cj["fit"] = (int)cl.fit; cj["offset"] = {cl.offsetX, cl.offsetY}; cj["scale"] = cl.scale;
-                cj["rotation"] = cl.rotation; cj["flipH"] = cl.flipH; cj["flipV"] = cl.flipV; cj["effects"] = fxJ(cl.effects);
-                cj["stretch"] = {cl.scaleX, cl.scaleY};
-            }
-            lj["clips"].push_back(cj);
-        }
+        for (auto& cl : l.clips) lj["clips"].push_back(clipJ(cl));
         c["layers"].push_back(lj);
+    }
+    c["activeStack"] = comp.activeStack;
+    c["stacks"] = json::array();
+    for (int si = 0; si < (int)comp.stacks.size(); ++si) {
+        const Stack& s = comp.stacks[si];
+        json sj; sj["name"] = s.name;
+        if (si == comp.activeStack) { sj["active"] = true; c["stacks"].push_back(sj); continue; } // dados = columns/clips acima
+        sj["columns"] = columnsJ(s.columns);
+        sj["layers"] = json::array();
+        for (auto& l : comp.layers) {
+            auto it = s.clips.find(l.id);
+            if (it == s.clips.end()) continue;
+            json a = json::array();
+            for (auto& cl : it->second) a.push_back(clipJ(cl));
+            sj["layers"].push_back({{"id", l.id}, {"clips", a}});
+        }
+        c["stacks"].push_back(sj);
     }
     j["screens"] = json::array();
     for (auto& s : screens) {
@@ -216,6 +306,29 @@ template <class T> static void get(const json& j, const char* k, T& v) {
     if (it != j.end() && !it->is_null()) v = it->get<T>();
 }
 
+static Clip clipFrom(const json& cj) {
+    Clip cl;
+    if (cj.is_object() && cj.contains("path")) {
+        get(cj, "id", cl.id); get(cj, "path", cl.path); get(cj, "name", cl.name);
+        int lm = 0; get(cj, "loop", lm); cl.loop = (LoopMode)lm;
+        get(cj, "speed", cl.speed); get(cj, "opacity", cl.opacity);
+        int f = 0; get(cj, "fit", f); cl.fit = (FitMode)f;
+        if (cj.contains("offset")) { cl.offsetX = cj["offset"][0]; cl.offsetY = cj["offset"][1]; }
+        get(cj, "scale", cl.scale);
+        get(cj, "rotation", cl.rotation); get(cj, "flipH", cl.flipH); get(cj, "flipV", cl.flipV);
+        if (cj.contains("stretch") && cj["stretch"].size() == 2) { cl.scaleX = cj["stretch"][0]; cl.scaleY = cj["stretch"][1]; }
+        if (!cj.contains("fit")) cl.fit = FitMode::Stretch;   // projetos muito antigos
+        if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
+    }
+    return cl;
+}
+static Column columnFrom(const json& cj) {
+    Column col;
+    if (cj.is_string()) col.name = cj.get<std::string>();          // formato antigo
+    else if (cj.is_object()) { get(cj, "name", col.name); get(cj, "color", col.color); }
+    return col;
+}
+
 bool Project::fromJson(const std::string& text, std::string* err) {
     try {
         json j = json::parse(text);
@@ -227,12 +340,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
         get(c, "width", p.comp.width); get(c, "height", p.comp.height); get(c, "fps", p.comp.fps);
         get(c, "colorDepth", p.comp.colorDepth); get(c, "master", p.comp.master);
         if (c.contains("effects")) p.comp.effects = fxFrom(c["effects"]);
-        for (auto& cj : c.value("columns", json::array())) {
-            Column col;
-            if (cj.is_string()) col.name = cj.get<std::string>();          // formato antigo
-            else if (cj.is_object()) { get(cj, "name", col.name); get(cj, "color", col.color); }
-            p.comp.columns.push_back(col);
-        }
+        for (auto& cj : c.value("columns", json::array())) p.comp.columns.push_back(columnFrom(cj));
         for (auto& lj : c.value("layers", json::array())) {
             Layer l;
             get(lj, "id", l.id); get(lj, "name", l.name); get(lj, "opacity", l.opacity);
@@ -245,24 +353,25 @@ bool Project::fromJson(const std::string& text, std::string* err) {
                 l.posX = lj["transform"][0]; l.posY = lj["transform"][1]; l.scale = lj["transform"][2]; l.rotation = lj["transform"][3];
             }
             if (lj.contains("effects")) l.effects = fxFrom(lj["effects"]);
-            for (auto& cj : lj.value("clips", json::array())) {
-                Clip cl;
-                if (cj.is_object() && cj.contains("path")) {
-                    get(cj, "id", cl.id); get(cj, "path", cl.path); get(cj, "name", cl.name);
-                    int lm = 0; get(cj, "loop", lm); cl.loop = (LoopMode)lm;
-                    get(cj, "speed", cl.speed); get(cj, "opacity", cl.opacity);
-                    int f = 0; get(cj, "fit", f); cl.fit = (FitMode)f;
-                    if (cj.contains("offset")) { cl.offsetX = cj["offset"][0]; cl.offsetY = cj["offset"][1]; }
-                    get(cj, "scale", cl.scale);
-                    get(cj, "rotation", cl.rotation); get(cj, "flipH", cl.flipH); get(cj, "flipV", cl.flipV);
-                    if (cj.contains("stretch") && cj["stretch"].size() == 2) { cl.scaleX = cj["stretch"][0]; cl.scaleY = cj["stretch"][1]; }
-                    if (!cj.contains("fit")) cl.fit = FitMode::Stretch;   // projetos muito antigos
-                    if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
-                }
-                l.clips.push_back(cl);
-            }
+            for (auto& cj : lj.value("clips", json::array())) l.clips.push_back(clipFrom(cj));
             p.comp.layers.push_back(l);
         }
+        // stacks (as não ativas trazem os seus dados; a ativa usa columns/clips acima)
+        p.comp.stacks.clear();
+        int act = 0; get(c, "activeStack", act);
+        for (auto& sj : c.value("stacks", json::array())) {
+            Stack s; get(sj, "name", s.name);
+            if (s.name.empty()) s.name = "Stack " + std::to_string(p.comp.stacks.size() + 1);
+            for (auto& cj : sj.value("columns", json::array())) s.columns.push_back(columnFrom(cj));
+            for (auto& lj : sj.value("layers", json::array())) {
+                uint32_t id = 0; get(lj, "id", id);
+                auto& v = s.clips[id];
+                for (auto& cj : lj.value("clips", json::array())) v.push_back(clipFrom(cj));
+            }
+            p.comp.stacks.push_back(std::move(s));
+        }
+        if (p.comp.stacks.empty()) { p.comp.stacks.push_back(Stack{"Stack 1"}); act = 0; }
+        p.comp.activeStack = std::clamp(act, 0, (int)p.comp.stacks.size() - 1);
         for (auto& sj : j.value("screens", json::array())) {
             Screen s;
             get(sj, "id", s.id); get(sj, "name", s.name);
@@ -299,6 +408,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
         p.ensureColumns(std::max<int>(1, (int)p.comp.columns.size()));
         uint32_t maxId = 0;
         for (auto& l : p.comp.layers) { maxId = std::max(maxId, l.id); for (auto& cl : l.clips) maxId = std::max(maxId, cl.id); }
+        for (auto& s : p.comp.stacks) for (auto& [id, v] : s.clips) for (auto& cl : v) maxId = std::max(maxId, cl.id);
         for (auto& s : p.screens) { maxId = std::max(maxId, s.id); for (auto& sl : s.slices) maxId = std::max(maxId, sl.id); }
         p.nextId = std::max(p.nextId, maxId + 1);
         for (auto& s : p.screens) for (auto& sl : s.slices)

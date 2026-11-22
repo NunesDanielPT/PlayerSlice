@@ -93,20 +93,34 @@ struct ClipGizmoState {
 };
 static ClipGizmoState g_cg;
 
+// clip a transformar: preview → o clip em preview; programa → o clip no ar da layer selecionada
+// (ou, se essa layer não tiver nada no ar, a layer de cima que tiver)
+static bool gizmoTarget(App& app, bool prev, int& li, int& ci, VideoPlayer*& v) {
+    Project& p = app.project;
+    li = ci = -1; v = nullptr;
+    if (prev) {
+        if (!app.comp.hasPreview()) return false;
+        li = p.layerIndex(app.comp.previewLayerId()); ci = app.comp.previewStack() == p.comp.activeStack ? app.comp.previewColumn() : -1;
+        v = app.comp.previewPlayer();
+    } else {
+        li = app.ui.selLayer;
+        if (li < 0 || li >= (int)p.comp.layers.size() || p.comp.layers[li].activeColumn < 0) {
+            li = -1;
+            for (int i = 0; i < (int)p.comp.layers.size(); ++i) if (p.comp.layers[i].activeColumn >= 0) { li = i; break; }
+        }
+        if (li < 0) return false;
+        ci = p.comp.layers[li].activeColumn;
+        v = app.comp.activePlayer(p.comp.layers[li].id);
+    }
+    if (li < 0 || li >= (int)p.comp.layers.size() || ci < 0 || ci >= (int)p.comp.layers[li].clips.size()) return false;
+    return v && !p.comp.layers[li].clips[ci].empty();
+}
+
 static void clipGizmo(App& app, bool prev, ImVec2 imgMin, float scale, const char* monId) {
     Project& p = app.project;
     int li = -1, ci = -1;
     VideoPlayer* v = nullptr;
-    if (prev) {
-        if (!app.comp.hasPreview()) return;
-        li = p.layerIndex(app.comp.previewLayerId()); ci = app.comp.previewColumn();
-        v = app.comp.previewPlayer();
-    } else {
-        li = app.ui.selLayer; ci = app.ui.selColumn;
-        if (li < 0 || li >= (int)p.comp.layers.size() || p.comp.layers[li].activeColumn != ci) return;
-        v = app.comp.activePlayer(p.comp.layers[li].id);
-    }
-    if (li < 0 || li >= (int)p.comp.layers.size() || ci < 0 || ci >= (int)p.comp.layers[li].clips.size()) return;
+    if (!gizmoTarget(app, prev, li, ci, v)) return;
     Layer& l = p.comp.layers[li];
     Clip& c = l.clips[ci];
     if (c.empty() || !v || v->width() <= 0) return;
@@ -221,15 +235,21 @@ static void monitorPanel(App& app, bool prev, int& mode, uint32_t& id, const cha
         if (ImGui::Button(T("Limpar"))) app.comp.clearPreview();
         ImGui::EndDisabled();
         if (has) { ImGui::SameLine(); ImGui::TextDisabled("%s", app.comp.previewClipInfo().name.c_str()); }
-        ImGui::SameLine();
-        ImGui::Checkbox(T("Transformar"), &app.ui.monitorGizmo);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Moldura para mover e esticar o clip com o rato (Shift = proporção; duplo clique = tamanho nativo)."));
     } else {
         int playing = 0;
-        for (auto& l : app.project.comp.layers) if (l.activeColumn >= 0) playing++;
+        for (auto& l : app.project.comp.layers) if (l.playing) playing++;
         ImGui::TextDisabled(T("%d layer(s) no ar  ·  %dx%d"), playing, app.project.comp.width, app.project.comp.height);
         ImGui::SameLine();
         if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
+    }
+    if (mode == 0) {
+        ImGui::SameLine();
+        ImGui::Checkbox((std::string(T("Transformar")) + "##" + cid).c_str(), &app.ui.monitorGizmo);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", prev ? T("Moldura para mover e esticar o clip em preview (Shift = proporção; duplo clique = tamanho nativo).")
+                                                                : T("Moldura para mover e esticar o clip no ar da layer selecionada (Shift = proporção; duplo clique = tamanho nativo)."));
+        ImGui::SameLine();
+        if (ImGui::SmallButton((std::string(T("Janela grande")) + "##big" + cid).c_str())) { app.ui.showBigTransform = true; app.ui.bigPrev = prev; ImGui::SetWindowFocus("###bigtransform"); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Abre uma janela grande para transformar com precisão."));
     }
     monitorImage(app, prev, mode, id, ImGui::GetContentRegionAvail(), cid);
     ImGui::EndChild();
@@ -240,17 +260,90 @@ static void compositionWindow(App& app) {
     if (!ImGui::Begin(winTitle("Preview / Programa", "comp").c_str(), &app.ui.panel.monitors)) { ImGui::End(); return; }
     ImVec2 a = ImGui::GetContentRegionAvail();
     bool sideBySide = a.x > a.y * 1.2f;
-    float sp = ImGui::GetStyle().ItemSpacing.x;
+    const float bar = 8.0f;   // divisória arrastável
+    float& f = app.ui.monSplit;
+    f = std::clamp(f, 0.15f, 0.85f);
+    auto splitter = [&](bool vertical, float total) {
+        ImGui::InvisibleButton("##monsplit", vertical ? ImVec2(bar, a.y) : ImVec2(a.x, bar));
+        bool hov = ImGui::IsItemHovered(), act = ImGui::IsItemActive();
+        if (hov || act) ImGui::SetMouseCursor(vertical ? ImGuiMouseCursor_ResizeEW : ImGuiMouseCursor_ResizeNS);
+        if (act) f = std::clamp(f + (vertical ? ImGui::GetIO().MouseDelta.x : ImGui::GetIO().MouseDelta.y) / std::max(1.f, total), 0.15f, 0.85f);
+        if (hov && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) f = 0.5f;
+        if (hov) ImGui::SetTooltip("%s", T("Arrasta para mudar o tamanho (duplo clique = metade)"));
+        ImVec2 r0 = ImGui::GetItemRectMin(), r1 = ImGui::GetItemRectMax();
+        ImU32 c = act ? col::Accent : hov ? IM_COL32(110, 115, 125, 255) : IM_COL32(60, 63, 70, 255);
+        if (vertical) ImGui::GetWindowDrawList()->AddLine(ImVec2((r0.x + r1.x) * 0.5f, r0.y + 4), ImVec2((r0.x + r1.x) * 0.5f, r1.y - 4), c, 2.0f);
+        else ImGui::GetWindowDrawList()->AddLine(ImVec2(r0.x + 4, (r0.y + r1.y) * 0.5f), ImVec2(r1.x - 4, (r0.y + r1.y) * 0.5f), c, 2.0f);
+    };
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     if (sideBySide) {
-        ImVec2 half((a.x - sp) * 0.5f, a.y);
-        monitorPanel(app, true, app.ui.viewMode[0], app.ui.viewId[0], "mon0", half);
-        ImGui::SameLine();
-        monitorPanel(app, false, app.ui.viewMode[1], app.ui.viewId[1], "mon1", half);
+        float w = a.x - bar;
+        float w0 = std::floor(w * f);
+        monitorPanel(app, true, app.ui.viewMode[0], app.ui.viewId[0], "mon0", ImVec2(w0, a.y));
+        ImGui::SameLine(); splitter(true, w); ImGui::SameLine();
+        monitorPanel(app, false, app.ui.viewMode[1], app.ui.viewId[1], "mon1", ImVec2(w - w0, a.y));
     } else {
-        ImVec2 half(a.x, (a.y - sp) * 0.5f);
-        monitorPanel(app, true, app.ui.viewMode[0], app.ui.viewId[0], "mon0", half);
-        monitorPanel(app, false, app.ui.viewMode[1], app.ui.viewId[1], "mon1", half);
+        float h = a.y - bar;
+        float h0 = std::floor(h * f);
+        monitorPanel(app, true, app.ui.viewMode[0], app.ui.viewId[0], "mon0", ImVec2(a.x, h0));
+        splitter(false, h);
+        monitorPanel(app, false, app.ui.viewMode[1], app.ui.viewId[1], "mon1", ImVec2(a.x, h - h0));
     }
+    ImGui::PopStyleVar();
+    ImGui::End();
+}
+
+// janela grande de transformação (não é modal: as saídas continuam a correr)
+static void bigTransformWindow(App& app) {
+    if (!app.ui.showBigTransform) return;
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.8f, vp->WorkSize.y * 0.8f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(500, 350), ImVec2(FLT_MAX, FLT_MAX));
+    if (!ImGui::Begin((std::string(T("Transformar")) + "###bigtransform").c_str(), &app.ui.showBigTransform, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    Project& p = app.project;
+    bool prev = app.ui.bigPrev;
+    ImGui::PushStyleColor(ImGuiCol_Button, prev ? ImVec4(0.75f, 0.52f, 0.1f, 1) : ImVec4(0.2f, 0.21f, 0.24f, 1));
+    if (ImGui::Button(T("PREVIEW"))) app.ui.bigPrev = true;
+    ImGui::PopStyleColor(); ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, !prev ? ImVec4(0.78f, 0.2f, 0.2f, 1) : ImVec4(0.2f, 0.21f, 0.24f, 1));
+    if (ImGui::Button(T("PROGRAMA"))) app.ui.bigPrev = false;
+    ImGui::PopStyleColor();
+    int li, ci; VideoPlayer* v;
+    bool has = gizmoTarget(app, prev, li, ci, v);
+    ImGui::SameLine();
+    if (has) ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s  ·  %s", p.comp.layers[li].name.c_str(), p.comp.layers[li].clips[ci].name.c_str());
+    else ImGui::TextDisabled("%s", prev ? T("Sem clip em preview (clica na metade de baixo de um clip).") : T("Nenhum clip no ar."));
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", T("  Arrasta = mover · cantos = esticar · Shift = proporção · duplo clique = repor"));
+
+    const float sideW = 300;
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImGui::BeginChild("##bigimg", ImVec2(std::max(100.f, avail.x - sideW - 8), avail.y), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+    {
+        const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
+        ImVec2 imgMin; float sc = 0;
+        ImVec2 a = ImGui::GetContentRegionAvail();
+        if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, a, &imgMin, &sc);
+        if (sc > 0) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 imgMax(imgMin.x + p.comp.width * sc, imgMin.y + p.comp.height * sc);
+            dl->AddRect(imgMin, imgMax, IM_COL32(120, 125, 135, 200));
+            float cx = (imgMin.x + imgMax.x) * 0.5f, cy = (imgMin.y + imgMax.y) * 0.5f;
+            dl->AddLine(ImVec2(cx, imgMin.y), ImVec2(cx, imgMax.y), IM_COL32(255, 255, 255, 40));
+            dl->AddLine(ImVec2(imgMin.x, cy), ImVec2(imgMax.x, cy), IM_COL32(255, 255, 255, 40));
+            clipGizmo(app, prev, imgMin, sc, "big");
+        }
+    }
+    ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginChild("##bigside", ImVec2(0, avail.y), ImGuiChildFlags_Borders);
+    if (has) {
+        ImGui::PushItemWidth(-110);
+        clipTransformControls(app, p.comp.layers[li].clips[ci]);
+        ImGui::PopItemWidth();
+    } else ImGui::TextWrapped("%s", T("Escolhe um clip para transformar."));
+    ImGui::EndChild();
     ImGui::End();
 }
 
@@ -543,6 +636,7 @@ void drawUI(App& app) {
     drawSliceEditor(app);
     compositionWindow(app);
     extraMonitors(app);
+    bigTransformWindow(app);
     outputsMonitor(app);
     drawProperties(app);
     drawClipTime(app);

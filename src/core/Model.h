@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <map>
 #include <cstdint>
 #include "core/Effects.h"
 
@@ -68,7 +69,16 @@ struct Layer {
     bool        useRegion = false;  // false = composição inteira
     Rect        region;             // em píxeis da composição
     std::vector<Clip> clips;        // uma por coluna
-    int         activeColumn = -1;  // estado em execução (não gravado)
+    int         activeColumn = -1;  // coluna no ar NA STACK VISÍVEL (não gravado)
+    bool        playing = false;    // tem clip no ar (de qualquer stack)
+};
+
+// Stack: conjunto de colunas + clips (como os Decks do Resolume). As layers são partilhadas.
+// A stack ativa vive em Composition::columns e Layer::clips; as outras ficam aqui guardadas.
+struct Stack {
+    std::string name;
+    std::vector<Column> columns;
+    std::map<uint32_t, std::vector<Clip>> clips;   // por ID de layer
 };
 
 struct Composition {
@@ -82,6 +92,8 @@ struct Composition {
     std::vector<Effect> effects;
     std::vector<Column> columns;
     std::vector<Layer> layers;      // índice 0 = layer do topo (desenhada por último)
+    std::vector<Stack> stacks{Stack{"Stack 1"}};
+    int activeStack = 0;
 };
 
 struct Slice {
@@ -137,6 +149,12 @@ struct Project {
     uint32_t newId() { return nextId++; }
 
     Layer&  addLayer(const std::string& name);
+    // stacks
+    void storeActiveStack();            // copia colunas/clips em uso para stacks[activeStack]
+    void switchStack(int i);
+    int  addStack(const std::string& name, bool duplicateActive = false);
+    void removeStack(int i);
+    void moveStack(int from, int to);
     Layer&  insertLayer(int index, const std::string& name);
     void    ensureColumns(int n);
     Screen& addScreen(const std::string& name);

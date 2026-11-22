@@ -37,6 +37,9 @@ struct UIState {
     bool     editPoints = false;      // editor: modo Editar pontos
     bool     handTool = false;        // editor: ferramenta mão
     bool     monitorGizmo = true;     // moldura de transformação nos monitores
+    float    monSplit = 0.5f;         // divisão preview | programa
+    bool     showBigTransform = false;// janela grande de transformação
+    bool     bigPrev = true;          // janela grande: preview (true) ou programa
     float    sliceFill = 0.15f;       // editor: opacidade do preenchimento das slices
     uint32_t renameSlice = 0;         // editor: slice a renomear (duplo clique)
     bool     openRenameSlice = false;
@@ -90,6 +93,8 @@ public:
     void setAllOutputs(bool on);
     void setOutput(uint32_t id, bool on);
     void runAction(int action);    // Action (Settings.h)
+    void selectStack(int i);       // muda a stack visível (os clips no ar continuam)
+    void newStack(bool duplicate);
     void applyLanguage();
     void applyPerformance();
     void applyOsc();

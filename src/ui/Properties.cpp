@@ -185,6 +185,7 @@ static void columnPanel(App& app) {
     endPanel();
 }
 
+void clipTransformControls(App& app, Clip& c);
 static void clipPanel(App& app) {
     if (!beginPanel("Clip", "props_clip", &app.ui.panel.propClip)) return;
     Project& p = app.project;
@@ -220,7 +221,15 @@ static void clipPanel(App& app) {
         param(app, T("Velocidade"), &c.speed, 0, 4, 1, "%.2fx");
         param(app, T("Opacidade"), &c.opacity, 0, 1, 1, "%.2f");
     }
-    if (ImGui::CollapsingHeader(T("Transformar##clip"), ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(T("Transformar##clip"), ImGuiTreeNodeFlags_DefaultOpen)) clipTransformControls(app, c);
+    if (ImGui::CollapsingHeader(T("Efeitos##clip"), ImGuiTreeNodeFlags_DefaultOpen))
+        effectsEditor(app, c.effects, "clipfx");
+    endPanel();
+}
+
+void clipTransformControls(App& app, Clip& c) {
+    Project& p = app.project;
+    {
         const char* fits[] = {T("Esticar"), T("Caber (com barras)"), T("Preencher (cortar)"), T("Tamanho nativo")};
         int fm = (int)c.fit;
         if (ImGui::Combo(T("Encaixe"), &fm, fits, 4)) { app.checkpoint(); c.fit = (FitMode)fm; }
@@ -235,9 +244,6 @@ static void clipPanel(App& app) {
         if (ImGui::Checkbox(T("Espelhar V"), &c.flipV)) app.checkpoint();
         if (ImGui::Button(T("Repor transformação"))) { app.checkpoint(); c.scale = c.scaleX = c.scaleY = 1; c.offsetX = c.offsetY = 0; c.rotation = 0; c.flipH = c.flipV = false; }
     }
-    if (ImGui::CollapsingHeader(T("Efeitos##clip"), ImGuiTreeNodeFlags_DefaultOpen))
-        effectsEditor(app, c.effects, "clipfx");
-    endPanel();
 }
 
 static void effectsBrowser(App& app) {

@@ -383,7 +383,7 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
 
     ImGuiIO& io = ImGui::GetIO();
     bool active = l.activeColumn == ci && !c.empty();
-    bool inPreview = !c.empty() && app.comp.previewLayerId() == l.id && app.comp.previewColumn() == ci;
+    bool inPreview = !c.empty() && app.comp.previewLayerId() == l.id && app.comp.previewColumn() == ci && app.comp.previewStack() == app.project.comp.activeStack;
     bool multiSel = app.ui.selCells.count({l.id, ci}) > 0;
     bool sel = (app.ui.selLayer == li && app.ui.selColumn == ci) || multiSel;
     ImGui::InvisibleButton("##cell", ImVec2(cellW, cellH), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
@@ -633,13 +633,110 @@ static bool columnHeader(App& app, int c, float cellW) {
     return alive;
 }
 
+// abas das stacks (como os Decks do Resolume)
+static void stackTabs(App& app) {
+    Project& p = app.project;
+    static int renameIdx = -1, dragFrom = -1;
+    bool openRename = false;
+    static char nameBuf[128];
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+    int n = (int)p.comp.stacks.size();
+    int openMenu = -1;
+    for (int i = 0; i < n; ++i) {
+        ImGui::PushID(i);
+        bool act = i == p.comp.activeStack;
+        bool live = false;     // há algo desta stack no ar?
+        if (!act) for (auto& l : p.comp.layers) if (const LayerRuntime* r = app.comp.runtime(l.id); r && r->cur && r->stack == i) { live = true; break; }
+        ImGui::PushStyleColor(ImGuiCol_Button, act ? ImVec4(0.13f, 0.55f, 0.47f, 1) : ImVec4(0.17f, 0.18f, 0.2f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, act ? ImVec4(0.16f, 0.62f, 0.53f, 1) : ImVec4(0.24f, 0.25f, 0.28f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Text, act ? ImVec4(1, 1, 1, 1) : ImVec4(0.75f, 0.76f, 0.8f, 1));
+        std::string label = p.comp.stacks[i].name;
+        if (live) label = "● " + label;
+        if (ImGui::Button(label.c_str())) app.selectStack(i);
+        ImGui::PopStyleColor(3);
+        if (live && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Há clips desta stack no ar."));
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            renameIdx = i; openRename = true;
+            snprintf(nameBuf, sizeof(nameBuf), "%s", p.comp.stacks[i].name.c_str());
+        }
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) openMenu = i;
+        // arrastar para mudar a ordem
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+            dragFrom = i;
+            ImGui::SetDragDropPayload("PS_STACK", &i, sizeof(int));
+            ImGui::EndDragDropSource();
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+            float x = dragFrom >= 0 && dragFrom < i ? b.x + 2 : a.x - 2;
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(x, a.y), ImVec2(x, b.y), IM_COL32(64, 224, 190, 255), 3.0f);
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("PS_STACK", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+                int from = *(const int*)pl->Data;
+                if (from != i) { app.checkpoint(); p.moveStack(from, i); app.dirty = true; }
+                dragFrom = -1;
+            }
+            ImGui::EndDragDropTarget();
+        }
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+    if (ImGui::Button("+##newstack")) app.newStack(false);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Nova stack (Ctrl+T)"));
+    ImGui::PopStyleVar(2);
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragFrom = -1;
+
+    static int menuIdx = -1;
+    if (openMenu >= 0) { menuIdx = openMenu; ImGui::OpenPopup("##stackmenu"); }
+    if (ImGui::BeginPopup("##stackmenu")) {
+        int i = menuIdx;
+        if (i >= 0 && i < (int)p.comp.stacks.size()) {
+            ImGui::TextDisabled("%s", p.comp.stacks[i].name.c_str());
+            ImGui::Separator();
+            if (ImGui::MenuItem(T("Mudar o nome"))) { renameIdx = i; openRename = true; snprintf(nameBuf, sizeof(nameBuf), "%s", p.comp.stacks[i].name.c_str()); }
+            if (ImGui::MenuItem(T("Nova stack"), "Ctrl+T")) { app.selectStack(i); app.newStack(false); }
+            if (ImGui::MenuItem(T("Duplicar"))) { app.selectStack(i); app.newStack(true); }
+            if (ImGui::MenuItem(T("Mover para a esquerda"), nullptr, false, i > 0)) { app.checkpoint(); p.moveStack(i, i - 1); app.dirty = true; }
+            if (ImGui::MenuItem(T("Mover para a direita"), nullptr, false, i + 1 < (int)p.comp.stacks.size())) { app.checkpoint(); p.moveStack(i, i + 1); app.dirty = true; }
+            ImGui::Separator();
+            if (ImGui::MenuItem(T("Apagar stack"), nullptr, false, p.comp.stacks.size() > 1)) {
+                app.checkpoint();
+                p.removeStack(i);
+                app.ui.selCells.clear();
+                app.ui.selColumn = std::min(app.ui.selColumn, (int)p.comp.columns.size() - 1);
+                app.ui.selColumnProp = std::min(app.ui.selColumnProp, (int)p.comp.columns.size() - 1);
+                app.dirty = true;
+            }
+        }
+        ImGui::EndPopup();
+    }
+    if (openRename) ImGui::OpenPopup("##stackrename");
+    if (ImGui::BeginPopup("##stackrename")) {
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        ImGui::SetNextItemWidth(220);
+        bool ok = ImGui::InputText("##n", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::SameLine();
+        ok |= ImGui::Button(T("OK"));
+        if (ok) {
+            if (renameIdx < (int)p.comp.stacks.size() && nameBuf[0]) { app.checkpoint(); p.comp.stacks[renameIdx].name = nameBuf; app.dirty = true; }
+            renameIdx = -1;
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { renameIdx = -1; ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    } else renameIdx = -1;
+    ImGui::Separator();
+}
+
 void drawClipGrid(App& app) {
     Project& p = app.project;
     app.ui.cells.clear();
     if (!app.ui.panel.clips) return;
 
     ImGui::SetNextWindowSize(ImVec2(900, 500), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin(winTitle("Clips", "clips").c_str(), &app.ui.panel.clips)) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Stack", "clips").c_str(), &app.ui.panel.clips)) { ImGui::End(); return; }
+
+    stackTabs(app);
 
     if (ImGui::Button(T("+ Layer"))) {
         app.checkpoint();
