@@ -1,0 +1,27 @@
+#include <windows.h>
+
+IDI_APP ICON "app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 0,1,0,0
+ PRODUCTVERSION 0,1,0,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "081604b0"
+    BEGIN
+      VALUE "CompanyName", "Daniel Nunes"
+      VALUE "FileDescription", "PLAYERSLICE - player de video para ecras LED"
+      VALUE "FileVersion", "0.1.0"
+      VALUE "ProductName", "PLAYERSLICE"
+      VALUE "ProductVersion", "0.1.0"
+      VALUE "LegalCopyright", "Daniel Nunes - github.com/NunesDanielPT"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x816, 1200
+  END
+END
