@@ -161,7 +161,16 @@ void Compositor::update(Project& p, double now) {
 
     if (m_prev) {
         if (!ids.count(m_prevLayerId)) clearPreview();
-        else m_prev->update(now);
+        else {
+            int li = p.layerIndex(m_prevLayerId);
+            if (li >= 0 && m_prevCol >= 0 && m_prevCol < (int)p.comp.layers[li].clips.size() &&
+                p.comp.layers[li].clips[m_prevCol].path == m_prevClip.path) {
+                const Clip& c = p.comp.layers[li].clips[m_prevCol];
+                if (c.speed != m_prevClip.speed) m_prev->setSpeed(c.speed);
+                m_prevClip = c;
+            }
+            m_prev->update(now);
+        }
     }
 
     for (auto& l : p.comp.layers) {
@@ -192,6 +201,32 @@ void Compositor::update(Project& p, double now) {
     }
 }
 
+void Compositor::clipCorners(const Project& p, const Layer& l, const Clip& c, float vw, float vh, float px[4], float py[4]) {
+    const int cw = p.comp.width, ch = p.comp.height;
+    Rect R = l.useRegion ? l.region : Rect{0, 0, (float)cw, (float)ch};
+    vw = std::max(1.f, vw); vh = std::max(1.f, vh);
+    float dw = R.w, dh = R.h;
+    switch (c.fit) {
+    case FitMode::Stretch: break;
+    case FitMode::Fit:  { float s = std::min(R.w / vw, R.h / vh); dw = vw * s; dh = vh * s; } break;
+    case FitMode::Fill: { float s = std::max(R.w / vw, R.h / vh); dw = vw * s; dh = vh * s; } break;
+    case FitMode::Native: dw = vw; dh = vh; break;
+    }
+    dw *= c.scale * c.scaleX; dh *= c.scale * c.scaleY;
+    float rcx = R.x + R.w * 0.5f, rcy = R.y + R.h * 0.5f;
+    float cx = rcx + c.offsetX, cy = rcy + c.offsetY;
+    const float hw = dw * 0.5f, hh = dh * 0.5f;
+    const float lx[4] = {-hw, hw, -hw, hw}, ly[4] = {-hh, -hh, hh, hh};
+    const float ca = std::cos(c.rotation * 3.14159265f / 180.f), sa = std::sin(c.rotation * 3.14159265f / 180.f);
+    const float la = std::cos(l.rotation * 3.14159265f / 180.f), lsn = std::sin(l.rotation * 3.14159265f / 180.f);
+    for (int i = 0; i < 4; ++i) {
+        float x = cx + lx[i] * ca - ly[i] * sa, y = cy + lx[i] * sa + ly[i] * ca;
+        float ox = (x - rcx) * l.scale, oy = (y - rcy) * l.scale;
+        px[i] = rcx + ox * la - oy * lsn + l.posX;
+        py[i] = rcy + ox * lsn + oy * la + l.posY;
+    }
+}
+
 void Compositor::drawClip(const Project& p, const Layer& l, const Clip& c, VideoPlayer& v, float opacity) {
     if (!v.hasFrame() || opacity <= 0.001f) return;
     const VideoTexture& t = v.texture();
@@ -201,30 +236,12 @@ void Compositor::drawClip(const Project& p, const Layer& l, const Clip& c, Video
     if (R.w <= 0 || R.h <= 0) return;
     float vw = (float)std::max(1, v.width()), vh = (float)std::max(1, v.height());
 
-    float dw = R.w, dh = R.h;
-    switch (c.fit) {
-    case FitMode::Stretch: break;
-    case FitMode::Fit:  { float s = std::min(R.w / vw, R.h / vh); dw = vw * s; dh = vh * s; } break;
-    case FitMode::Fill: { float s = std::max(R.w / vw, R.h / vh); dw = vw * s; dh = vh * s; } break;
-    case FitMode::Native: dw = vw; dh = vh; break;
-    }
-    dw *= c.scale; dh *= c.scale;
-    // centro do clip; transformação do clip e depois da layer (em volta do centro da região)
-    float rcx = R.x + R.w * 0.5f, rcy = R.y + R.h * 0.5f;
-    float cx = rcx + c.offsetX, cy = rcy + c.offsetY;
-    const float hw = dw * 0.5f, hh = dh * 0.5f;
-    const float lx[4] = {-hw, hw, -hw, hw}, ly[4] = {-hh, -hh, hh, hh};   // TL, TR, BL, BR
-    const float ca = std::cos(c.rotation * 3.14159265f / 180.f), sa = std::sin(c.rotation * 3.14159265f / 180.f);
-    const float la = std::cos(l.rotation * 3.14159265f / 180.f), lsn = std::sin(l.rotation * 3.14159265f / 180.f);
     QuadParams q;
     float px[4], py[4];
+    clipCorners(p, l, c, vw, vh, px, py);
     for (int i = 0; i < 4; ++i) {
-        float x = cx + lx[i] * ca - ly[i] * sa, y = cy + lx[i] * sa + ly[i] * ca;     // clip
-        float ox = (x - rcx) * l.scale, oy = (y - rcy) * l.scale;                    // layer: escala
-        x = rcx + ox * la - oy * lsn + l.posX; y = rcy + ox * lsn + oy * la + l.posY;  // rotação + posição
-        px[i] = x; py[i] = y;
-        q.pos[i][0] = x / cw * 2.f - 1.f;
-        q.pos[i][1] = 1.f - y / ch * 2.f;
+        q.pos[i][0] = px[i] / cw * 2.f - 1.f;
+        q.pos[i][1] = 1.f - py[i] / ch * 2.f;
     }
     float u0 = 0, u1 = v.uvMaxX(), v0 = 0, v1 = v.uvMaxY();
     if (c.flipH) std::swap(u0, u1);

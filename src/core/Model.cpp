@@ -178,6 +178,7 @@ std::string Project::toJson() const {
                 cj["loop"] = (int)cl.loop; cj["speed"] = cl.speed; cj["opacity"] = cl.opacity;
                 cj["fit"] = (int)cl.fit; cj["offset"] = {cl.offsetX, cl.offsetY}; cj["scale"] = cl.scale;
                 cj["rotation"] = cl.rotation; cj["flipH"] = cl.flipH; cj["flipV"] = cl.flipV; cj["effects"] = fxJ(cl.effects);
+                cj["stretch"] = {cl.scaleX, cl.scaleY};
             }
             lj["clips"].push_back(cj);
         }
@@ -190,7 +191,7 @@ std::string Project::toJson() const {
         sj["monitor"] = s.monitorKey; sj["width"] = s.width; sj["height"] = s.height;
         sj["brightness"] = s.brightness; sj["testPattern"] = s.testPattern; sj["inToggle"] = s.inToggle;
         sj["opacity"] = s.opacity; sj["contrast"] = s.contrast; sj["rgb"] = {s.red, s.green, s.blue};
-        sj["guide"] = s.guidePath; sj["guideOpacity"] = s.guideOpacity;
+        sj["guide"] = s.guidePath; sj["guideOpacity"] = s.guideOpacity; sj["locked"] = s.locked;
         sj["slices"] = json::array();
         for (auto& sl : s.slices) {
             json k;
@@ -200,6 +201,7 @@ std::string Project::toJson() const {
             k["rotation"] = sl.rotation; k["flipH"] = sl.flipH; k["flipV"] = sl.flipV;
             k["opacity"] = sl.opacity; k["brightness"] = sl.brightness; k["color"] = sl.color;
             auto pts = [](const float p[4][2]) { json a = json::array(); for (int i = 0; i < 4; ++i) a.push_back({p[i][0], p[i][1]}); return a; };
+            k["locked"] = sl.locked;
             k["inWarp"] = sl.inWarp; k["inPts"] = pts(sl.inPts);
             k["outWarp"] = sl.outWarp; k["outPts"] = pts(sl.outPts);
             sj["slices"].push_back(k);
@@ -253,6 +255,8 @@ bool Project::fromJson(const std::string& text, std::string* err) {
                     if (cj.contains("offset")) { cl.offsetX = cj["offset"][0]; cl.offsetY = cj["offset"][1]; }
                     get(cj, "scale", cl.scale);
                     get(cj, "rotation", cl.rotation); get(cj, "flipH", cl.flipH); get(cj, "flipV", cl.flipV);
+                    if (cj.contains("stretch") && cj["stretch"].size() == 2) { cl.scaleX = cj["stretch"][0]; cl.scaleY = cj["stretch"][1]; }
+                    if (!cj.contains("fit")) cl.fit = FitMode::Stretch;   // projetos muito antigos
                     if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
                 }
                 l.clips.push_back(cl);
@@ -267,7 +271,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             get(sj, "brightness", s.brightness); get(sj, "testPattern", s.testPattern); get(sj, "inToggle", s.inToggle);
             get(sj, "opacity", s.opacity); get(sj, "contrast", s.contrast);
             if (sj.contains("rgb") && sj["rgb"].size() == 3) { s.red = sj["rgb"][0]; s.green = sj["rgb"][1]; s.blue = sj["rgb"][2]; }
-            get(sj, "guide", s.guidePath); get(sj, "guideOpacity", s.guideOpacity);
+            get(sj, "guide", s.guidePath); get(sj, "guideOpacity", s.guideOpacity); get(sj, "locked", s.locked);
             for (auto& k : sj.value("slices", json::array())) {
                 Slice sl;
                 get(k, "id", sl.id); get(k, "name", sl.name); get(k, "enabled", sl.enabled);
@@ -281,7 +285,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
                     for (int i = 0; i < 4; ++i) { p[i][0] = k[key][i][0]; p[i][1] = k[key][i][1]; }
                     return true;
                 };
-                get(k, "inWarp", sl.inWarp); get(k, "outWarp", sl.outWarp);
+                get(k, "inWarp", sl.inWarp); get(k, "outWarp", sl.outWarp); get(k, "locked", sl.locked);
                 if (!rdPts("inPts", sl.inPts)) sl.inWarp = false;
                 if (!rdPts("outPts", sl.outPts)) sl.outWarp = false;
                 s.slices.push_back(sl);

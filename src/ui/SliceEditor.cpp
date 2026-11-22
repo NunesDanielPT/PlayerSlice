@@ -24,6 +24,15 @@ namespace {
 const char* g_help = nullptr;   // texto da caixa de ajuda (elemento debaixo do rato)
 void hint(const char* text) { if (ImGui::IsItemHovered()) g_help = text; }
 
+// cadeado desenhado (não depende de fontes com ícones)
+void drawLockIcon(ImDrawList* dl, ImVec2 c, bool locked, bool hovered) {
+    ImU32 col = locked ? IM_COL32(255, 190, 70, 255) : hovered ? IM_COL32(200, 200, 205, 255) : IM_COL32(110, 112, 118, 255);
+    dl->AddRectFilled(ImVec2(c.x - 5, c.y - 1), ImVec2(c.x + 5, c.y + 6), col, 1.5f);
+    if (locked) dl->PathArcTo(ImVec2(c.x, c.y - 2), 3.5f, 3.14159f, 6.28318f, 8);
+    else dl->PathArcTo(ImVec2(c.x + 3, c.y - 3), 3.5f, 3.14159f, 6.0f, 8);
+    dl->PathStroke(col, 0, 1.6f);
+}
+
 // ---------------------------------------------------------------------------
 // geometria do editor
 // ---------------------------------------------------------------------------
@@ -264,7 +273,7 @@ void screenList(App& app) {
         bool selS = app.ui.selScreen == s.id;
         ImGuiTreeNodeFlags tf = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
         if (selS && app.ui.selSlice == 0) tf |= ImGuiTreeNodeFlags_Selected;
-        bool open = ImGui::TreeNodeEx("##scr", tf, "%s%s", s.name.c_str(), app.isLive(s.id) ? T("  ● NO AR") : "");
+        bool open = ImGui::TreeNodeEx("##scr", tf, "%s%s%s", s.name.c_str(), s.locked ? T("  [trancado]") : "", app.isLive(s.id) ? T("  ● NO AR") : "");
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) { app.ui.selScreen = s.id; app.ui.selSlice = 0; }
         hint(T("Ecrã = uma saída da placa gráfica. Clica para ver as propriedades à direita."));
         if (ImGui::BeginPopupContextItem("scrctx")) {
@@ -273,6 +282,7 @@ void screenList(App& app) {
                 Slice& sl = p.addSlice(s, T("Slice ") + std::to_string(s.slices.size() + 1));
                 app.ui.selScreen = s.id; app.ui.selSlice = sl.id;
             }
+            if (ImGui::MenuItem(T("Trancar ecrã"), nullptr, s.locked)) { app.checkpoint(); s.locked = !s.locked; }
             if (ImGui::MenuItem(T("Duplicar ecrã"))) {
                 app.checkpoint();
                 Screen copy = s; copy.id = p.newId(); copy.name += T(" (cópia)"); copy.device = ScreenDevice::Disabled;
@@ -302,7 +312,9 @@ void screenList(App& app) {
                 ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(cp.x, cp.y + 4), ImVec2(cp.x + 10, cp.y + 14), sliceColorU32(sl.color, 255), 2);
                 ImGui::SetCursorScreenPos(ImVec2(cp.x + 14, cp.y));
                 std::string nm = sl.name + ((sl.inWarp || sl.outWarp) ? "  ◇" : "");
-                if (ImGui::Selectable(nm.c_str(), app.ui.selSlice == sl.id)) { app.ui.selScreen = s.id; app.ui.selSlice = sl.id; g_ed.selPoint = -1; }
+                float lockW = 22;
+                if (ImGui::Selectable(nm.c_str(), app.ui.selSlice == sl.id, 0, ImVec2(ImGui::GetContentRegionAvail().x - lockW, 0))) { app.ui.selScreen = s.id; app.ui.selSlice = sl.id; g_ed.selPoint = -1; }
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { app.ui.selScreen = s.id; app.ui.renameSlice = sl.id; app.ui.openRenameSlice = true; }
                 hint(T("Arrasta para mudar a ordem (as de baixo ficam por cima). Botão direito: mais opções."));
                 if (ImGui::BeginDragDropSource()) {
                     int idx[2] = {si, k};
@@ -322,8 +334,21 @@ void screenList(App& app) {
                     }
                     ImGui::EndDragDropTarget();
                 }
+                // cadeado (clique para trancar/destrancar)
+                {
+                    ImGui::SameLine();
+                    ImVec2 lp = ImGui::GetCursorScreenPos();
+                    ImGui::PushID("lk");
+                    if (ImGui::InvisibleButton("##lock", ImVec2(18, ImGui::GetFrameHeight() - 6))) { app.checkpoint(); sl.locked = !sl.locked; }
+                    bool hov = ImGui::IsItemHovered();
+                    hint(T("Trancar/destrancar esta slice (evita mexer sem querer)."));
+                    ImGui::PopID();
+                    drawLockIcon(ImGui::GetWindowDrawList(), ImVec2(lp.x + 9, lp.y + 8), sl.locked, hov);
+                }
                 if (ImGui::BeginPopupContextItem("slctx")) {
                     app.ui.selScreen = s.id; app.ui.selSlice = sl.id;
+                    if (ImGui::MenuItem(T("Renomear"))) { app.ui.renameSlice = sl.id; app.ui.openRenameSlice = true; }
+                    if (ImGui::MenuItem(T("Trancar"), nullptr, sl.locked)) { app.checkpoint(); sl.locked = !sl.locked; }
                     if (ImGui::MenuItem(T("Duplicar"), "Ctrl+D")) duplicateSlice(app, s, s.slices[k]);
                     else if (ImGui::MenuItem(T("Apagar"), "Del")) { delSlice = sl.id; delOwner = &s; }
                     ImGui::EndPopup();
@@ -417,6 +442,7 @@ void screenProps(App& app, Screen& s) {
     }
     if (ImGui::Checkbox(T("No atalho"), &s.inToggle)) app.markDirty();
     hint(T("Este ecrã liga/desliga com o atalho das saídas."));
+    if (ImGui::Checkbox(T("Trancar ecrã (as slices não se mexem)"), &s.locked)) app.checkpoint();
 
     ImGui::SeparatorText(T("Output Guide"));
     if (ImGui::Button(T("Carregar imagem..."))) {
@@ -460,6 +486,9 @@ void sliceProps(App& app, Screen& s, Slice& sl) {
     ImGui::SeparatorText(sl.name.c_str());
     inputTextStd(T("Nome##sl"), sl.name);
     undoOnActivate(app);
+    if (ImGui::Checkbox(T("Trancada"), &sl.locked)) app.checkpoint();
+    hint(T("Trancar/destrancar esta slice (evita mexer sem querer)."));
+    if (sl.locked || s.locked) ImGui::TextColored(ImVec4(1, 0.75f, 0.3f, 1), "%s", T("Trancada: não se mexe no canvas."));
 
     int srcIdx = sl.sourceLayer ? p.layerIndex(sl.sourceLayer) : -1;
     std::string src = srcIdx < 0 ? T("Composição") : p.comp.layers[srcIdx].name;
@@ -671,7 +700,11 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
             if (hit != app.ui.selSlice) g_ed.selPoint = -1;
             app.ui.selSlice = hit;
             selected = selectedSlice(app, sc);
-            if (hit && selected && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (hit && selected && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                app.ui.renameSlice = hit; app.ui.openRenameSlice = true;   // duplo clique: renomear
+            } else if (hit && selected && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && (selected->locked || sc.locked)) {
+                g_help = T("Esta slice (ou o ecrã) está trancada. Destranca para mexer.");
+            } else if (hit && selected && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 app.checkpoint();
                 g_ed.slice = hit;
                 g_ed.start = getShape(*selected, tab);
@@ -757,7 +790,7 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
     }
 
     // teclado: setas (modo pontos: o canto selecionado), Delete, Ctrl+D
-    if ((hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) && selected && !io.WantTextInput) {
+    if ((hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) && selected && !io.WantTextInput && !selected->locked && !sc.locked) {
         float step = io.KeyShift ? 10.f : (pointsMode ? 0.5f : 1.f);
         ImVec2 mv(0, 0);
         if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) mv.x -= step;
@@ -791,10 +824,13 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
         ImVec2 q[4]; for (int i = 0; i < 4; ++i) q[i] = v.toScreen(sh.p[i]);
         bool sel = s.id == app.ui.selSlice;
         bool convex = quadConvex(sh.p);
-        int alpha = !s.enabled ? 20 : sel ? 90 : 55;
-        if (convex) dl->AddQuadFilled(q[0], q[1], q[2], q[3], sliceColorU32(s.color, alpha));
-        dl->AddLine(q[0], q[2], sliceColorU32(s.color, 120));
-        dl->AddLine(q[1], q[3], sliceColorU32(s.color, 120));
+        float fa = std::clamp(app.ui.sliceFill, 0.f, 1.f);
+        int alpha = !s.enabled ? (int)(fa * 60) : sel ? (int)(fa * 255 * 1.4f) : (int)(fa * 255);
+        alpha = std::clamp(alpha, 0, 255);
+        if (convex && alpha > 0) dl->AddQuadFilled(q[0], q[1], q[2], q[3], sliceColorU32(s.color, alpha));
+        int la = std::clamp((int)(fa * 255 * 1.6f) + 30, 40, 160);
+        dl->AddLine(q[0], q[2], sliceColorU32(s.color, la));
+        dl->AddLine(q[1], q[3], sliceColorU32(s.color, la));
         ImU32 edge = !convex ? IM_COL32(255, 60, 60, 255) : sel ? IM_COL32(255, 255, 255, 255) : sliceColorU32(s.color, 255);
         dl->AddQuad(q[0], q[1], q[2], q[3], edge, sel ? 2.f : 1.f);
         ImVec2 cen((q[0].x + q[1].x + q[2].x + q[3].x) * 0.25f, (q[0].y + q[1].y + q[2].y + q[3].y) * 0.25f);
@@ -802,7 +838,8 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
         else snprintf(dims, sizeof(dims), "%.0f,%.0f // %.0f x %.0f%s", sh.r.x, sh.r.y, sh.r.w, sh.r.h, std::fabs(sh.r.rot) > 0.01f ? "  ⟳" : "");
         ERect sb = bbox(q);
         bool compact = sb.h < 40 && sb.w < 140;
-        label(dl, cen, s.name.c_str(), dims, compact);
+        std::string nm = (s.locked || sc.locked) ? std::string(T("[trancada] ")) + s.name : s.name;
+        label(dl, cen, nm.c_str(), dims, compact);
         if (!convex) dl->AddText(ImVec2(cen.x - 40, cen.y + 18), IM_COL32(255, 80, 80, 255), T("forma inválida"));
     }
     if (selected) {
@@ -841,6 +878,26 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
     }
     dl->PopClipRect();
 
+    // renomear slice (duplo clique no canvas ou na lista)
+    if (app.ui.openRenameSlice) { ImGui::OpenPopup("###renslice"); app.ui.openRenameSlice = false; }
+    if (ImGui::BeginPopup("###renslice")) {
+        Slice* rs = nullptr;
+        for (auto& x : sc.slices) if (x.id == app.ui.renameSlice) rs = &x;
+        if (!rs) { app.ui.renameSlice = 0; ImGui::CloseCurrentPopup(); }
+        else {
+            static char nb[128];
+            if (ImGui::IsWindowAppearing()) { snprintf(nb, sizeof(nb), "%s", rs->name.c_str()); ImGui::SetKeyboardFocusHere(); }
+            ImGui::TextUnformatted(T("Nome da slice:"));
+            if (ImGui::InputText("##nm", nb, sizeof(nb), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                app.checkpoint(); rs->name = nb; app.ui.renameSlice = 0; ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { app.ui.renameSlice = 0; ImGui::CloseCurrentPopup(); }
+        }
+        ImGui::EndPopup();
+    } else if (app.ui.renameSlice) {
+        app.ui.renameSlice = 0;   // popup fechado clicando fora
+    }
+
     // menu de contexto
     if (ImGui::BeginPopupContextItem("canvasctx")) {
         if (ImGui::MenuItem(T("Adicionar slice aqui"))) {
@@ -863,7 +920,9 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
             if (selected && ImGui::MenuItem(T("Ocupar o canvas inteiro"))) {
                 app.checkpoint(); Shape sh; sh.warp = false; sh.r = {0, 0, cw, ch, 0}; setShape(*selected, tab, sh);
             }
-            if (selected && ImGui::MenuItem(T("Apagar"), "Del")) deleteSlice(app, sc, selected->id);
+            if (selected && ImGui::MenuItem(T("Renomear"))) { app.ui.renameSlice = selected->id; app.ui.openRenameSlice = true; }
+            if (selected && ImGui::MenuItem(T("Trancar"), nullptr, selected->locked)) { app.checkpoint(); selected->locked = !selected->locked; }
+            if (selected && ImGui::MenuItem(T("Apagar"), "Del", false, !selected->locked && !sc.locked)) deleteSlice(app, sc, selected->id);
         }
         ImGui::EndPopup();
     }
@@ -928,6 +987,12 @@ void toolbar(App& app, Screen* sc) {
         ImGui::SliderFloat("##bga", &app.ui.editorBgAlpha, 0.1f, 1.f, "%.2f");
         hint(T("Opacidade do vídeo de fundo"));
     }
+    ImGui::SameLine(0, 12);
+    ImGui::TextUnformatted(T("Slices:"));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(70);
+    ImGui::SliderFloat("##slfill", &app.ui.sliceFill, 0.f, 0.6f, "%.2f");
+    hint(T("Opacidade do preenchimento das slices no editor (mais baixo = vês melhor o vídeo por trás)."));
     if (sc) {
         ImGui::SameLine(0, 12);
         if (ImGui::Checkbox(T("Test pattern"), &sc->testPattern)) app.markDirty();

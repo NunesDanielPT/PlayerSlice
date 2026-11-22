@@ -20,13 +20,85 @@
 #include <filesystem>
 #include <mmsystem.h>
 #include <sstream>
+#include <atomic>
+#include <mutex>
+#include <thread>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace ps {
 
 static App* g_app = nullptr;
-App* App::instance() { return g_app; }
+
+// ---------------------------------------------------------------------------
+// impedir o rato de entrar nos ecrãs de saída (hook de rato de baixo nível numa
+// thread própria, para o rato nunca ficar lento enquanto a interface desenha)
+// ---------------------------------------------------------------------------
+static std::mutex g_blockMtx;
+static std::vector<RECT> g_blockRects;      // protegido por g_blockMtx
+static std::vector<RECT> g_blockApplied;    // thread principal
+static HHOOK g_mouseHook = nullptr;
+static std::thread g_hookThread;
+static DWORD g_hookThreadId = 0;
+
+static LRESULT CALLBACK mouseHookProc(int code, WPARAM wp, LPARAM lp) {
+    if (code == HC_ACTION && wp == WM_MOUSEMOVE) {
+        const MSLLHOOKSTRUCT* m = (const MSLLHOOKSTRUCT*)lp;
+        std::lock_guard<std::mutex> lk(g_blockMtx);
+        if (!g_blockRects.empty()) {
+            POINT cur; GetCursorPos(&cur);
+            bool curInside = false;
+            for (auto& r : g_blockRects) if (PtInRect(&r, cur)) curInside = true;
+            if (!curInside)   // se já estiver lá dentro, deixa sair
+                for (auto& r : g_blockRects) if (PtInRect(&r, m->pt)) return 1;
+        }
+    }
+    return CallNextHookEx(g_mouseHook, code, wp, lp);
+}
+
+static void stopMouseHook() {
+    if (!g_hookThread.joinable()) return;
+    PostThreadMessageW(g_hookThreadId, WM_QUIT, 0, 0);
+    g_hookThread.join();
+    g_hookThreadId = 0;
+}
+
+static void startMouseHook() {
+    if (g_hookThread.joinable()) return;
+    std::atomic<bool> ready{false};
+    g_hookThread = std::thread([&ready] {
+        g_hookThreadId = GetCurrentThreadId();
+        MSG msg;
+        PeekMessageW(&msg, nullptr, 0, 0, PM_NOREMOVE);   // criar a fila de mensagens
+        g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, mouseHookProc, GetModuleHandleW(nullptr), 0);
+        ready = true;
+        while (GetMessageW(&msg, nullptr, 0, 0) > 0) {}
+        if (g_mouseHook) UnhookWindowsHookEx(g_mouseHook);
+        g_mouseHook = nullptr;
+    });
+    while (!ready.load()) Sleep(1);
+}
+
+static void updateMouseLock(const std::vector<RECT>& rects, HWND mainWnd) {
+    // nunca bloquear o monitor da interface (senão o rato ficava preso)
+    HMONITOR mainMon = MonitorFromWindow(mainWnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mainMon, &mi);
+    std::vector<RECT> b;
+    for (auto& r : rects) { RECT x; if (!IntersectRect(&x, &r, &mi.rcMonitor)) b.push_back(r); }
+    bool changed = b.size() != g_blockApplied.size();
+    for (size_t i = 0; !changed && i < b.size(); ++i) changed = memcmp(&b[i], &g_blockApplied[i], sizeof(RECT)) != 0;
+    if (!changed) return;
+    g_blockApplied = b;
+    { std::lock_guard<std::mutex> lk(g_blockMtx); g_blockRects = b; }
+    if (!b.empty()) {
+        startMouseHook();
+        POINT cur; GetCursorPos(&cur);   // tirar o rato de dentro de uma saída
+        for (auto& r : b) if (PtInRect(&r, cur)) SetCursorPos((mi.rcWork.left + mi.rcWork.right) / 2, (mi.rcWork.top + mi.rcWork.bottom) / 2);
+    } else {
+        stopMouseHook();
+    }
+}
 
 static std::wstring autosavePath() { return appDataDir() + L"\\autosave.psproj"; }
 
@@ -358,6 +430,8 @@ LRESULT App::handleMessage(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             if (DragQueryFileW(drop, i, path, (UINT)std::size(path))) pendingDrops.push_back(toUtf8(path));
         }
         DragFinish(drop);
+        // com painéis em vários monitores, o ImGui usa coordenadas do ecrã
+        if (ImGui::GetCurrentContext() && (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)) ClientToScreen(h, &pt);
         dropX = (float)pt.x; dropY = (float)pt.y;
         return 0;
     }
@@ -456,6 +530,7 @@ void App::frame() {
     }
     auto live = [this](uint32_t id) { return isLive(id); };
     outputs.sync(project, displays, live, settings().outputsOffBlack);
+    updateMouseLock(settings().lockMouseOutputs ? outputs.monitorRects() : std::vector<RECT>{}, m_hwnd);
 
     // com saídas no ar a interface pode ir a 30 fps: as saídas continuam ao ritmo do vsync
     bool drawUi = !(settings().limitUiWhenLive && anyLive() && outputs.count() > 0) || now - m_lastUi >= 1.0 / 30.0 - 0.002;
@@ -473,6 +548,11 @@ void App::frame() {
         G.setTarget(m_rtv.Get(), cr.right - cr.left, cr.bottom - cr.top);
         G.clear(m_rtv.Get(), 0.08f, 0.08f, 0.09f, 1);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        // painéis arrastados para fora da janela principal (outros monitores)
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
     }
 
     bool vsynced = false;
@@ -516,7 +596,8 @@ int App::run(HINSTANCE inst) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_ViewportsEnable;
+    io.ConfigWindowsMoveFromTitleBarOnly = true;   // arrastar dentro dos monitores não move a janela
     io.ConfigDebugHighlightIdConflicts = false;
     static std::string iniPath = toUtf8(dir + L"\\layout-v2.ini");
     io.IniFilename = iniPath.c_str();
@@ -563,6 +644,7 @@ int App::run(HINSTANCE inst) {
     }
 
     saveUiState(*this);
+    updateMouseLock({}, m_hwnd);
     Osc::get().shutdown();
     WebServer::get().shutdown();
     outputs.closeAll();

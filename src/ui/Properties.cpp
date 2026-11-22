@@ -227,11 +227,13 @@ static void clipPanel(App& app) {
         param(app, T("Posição X"), &c.offsetX, -(float)p.comp.width, (float)p.comp.width, 0, "%.0f");
         param(app, T("Posição Y"), &c.offsetY, -(float)p.comp.height, (float)p.comp.height, 0, "%.0f");
         param(app, T("Escala"), &c.scale, 0.01f, 4, 1, "%.3f");
+        param(app, T("Esticar X"), &c.scaleX, 0.05f, 4, 1, "%.3f");
+        param(app, T("Esticar Y"), &c.scaleY, 0.05f, 4, 1, "%.3f");
         param(app, T("Rotação"), &c.rotation, -180, 180, 0, "%.1f°");
         if (ImGui::Checkbox(T("Espelhar H"), &c.flipH)) app.checkpoint();
         ImGui::SameLine();
         if (ImGui::Checkbox(T("Espelhar V"), &c.flipV)) app.checkpoint();
-        if (ImGui::Button(T("Repor transformação"))) { app.checkpoint(); c.scale = 1; c.offsetX = c.offsetY = 0; c.rotation = 0; c.flipH = c.flipV = false; }
+        if (ImGui::Button(T("Repor transformação"))) { app.checkpoint(); c.scale = c.scaleX = c.scaleY = 1; c.offsetX = c.offsetY = 0; c.rotation = 0; c.flipH = c.flipV = false; }
     }
     if (ImGui::CollapsingHeader(T("Efeitos##clip"), ImGuiTreeNodeFlags_DefaultOpen))
         effectsEditor(app, c.effects, "clipfx");

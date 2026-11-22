@@ -111,6 +111,7 @@ bool Settings::load() {
         audioName = j.value("audioName", audioName);
         outputsOffBlack = j.value("outputsOffBlack", outputsOffBlack);
         startOutputsLive = j.value("startOutputsLive", startOutputsLive);
+        lockMouseOutputs = j.value("lockMouseOutputs", lockMouseOutputs);
         checkUpdates = j.value("checkUpdates", checkUpdates);
         priority = j.value("priority", priority);
         preventSleep = j.value("preventSleep", preventSleep);
@@ -142,7 +143,7 @@ bool Settings::save() const {
     json j;
     j["language"] = language; j["gpu"] = gpu; j["network"] = network;
     j["audioDevice"] = audioDevice; j["audioName"] = audioName;
-    j["outputsOffBlack"] = outputsOffBlack; j["startOutputsLive"] = startOutputsLive; j["checkUpdates"] = checkUpdates;
+    j["outputsOffBlack"] = outputsOffBlack; j["startOutputsLive"] = startOutputsLive; j["lockMouseOutputs"] = lockMouseOutputs; j["checkUpdates"] = checkUpdates;
     j["priority"] = priority; j["preventSleep"] = preventSleep; j["hwDecode"] = hwDecode;
     j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive;
     j["oscIn"] = oscIn; j["oscInPort"] = oscInPort; j["oscOut"] = oscOut;

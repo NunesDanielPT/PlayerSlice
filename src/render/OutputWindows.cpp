@@ -145,6 +145,12 @@ void OutputWindows::sync(const Project& p, const std::vector<DisplayInfo>& displ
     }
 }
 
+std::vector<RECT> OutputWindows::monitorRects() const {
+    std::vector<RECT> r;
+    for (auto& [id, w] : m_wins) if (w.device == ScreenDevice::Monitor && w.hwnd) r.push_back(w.rect);
+    return r;
+}
+
 bool OutputWindows::coversMonitor(HMONITOR m) const {
     for (auto& [id, w] : m_wins) if (w.device == ScreenDevice::Monitor && w.monitor == m) return true;
     return false;
@@ -153,7 +159,14 @@ bool OutputWindows::coversMonitor(HMONITOR m) const {
 void OutputWindows::present(const Compositor& comp, const LiveFn& live, bool& didVsync) {
     Gfx& G = gfx();
     bool first = true;
+    // garantir que nada fica à frente das saídas (notificações, outras janelas "sempre visíveis")
+    static DWORD lastTop = 0;
+    DWORD nowTick = GetTickCount();
+    bool reassert = nowTick - lastTop > 1000;
+    if (reassert) lastTop = nowTick;
     for (auto& [id, w] : m_wins) {
+        if (reassert && w.device == ScreenDevice::Monitor && w.hwnd)
+            SetWindowPos(w.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
         if (w.needResize) resize(w);
         if (!w.rtv) continue;
         const RenderTarget* src = live(id) ? comp.screenRT(id) : nullptr; // desligada → preto

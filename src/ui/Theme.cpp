@@ -44,6 +44,7 @@ void setupTheme(float dpi) {
     s.WindowBorderSize = 1; s.FrameBorderSize = 0;
     s.WindowPadding = ImVec2(8, 8); s.FramePadding = ImVec2(6, 4); s.ItemSpacing = ImVec2(6, 5);
     s.ScaleAllSizes(dpi);
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) s.WindowRounding = 0.0f;
 
     ImVec4* c = s.Colors;
     auto rgb = [](int r, int g, int b, float a = 1.f) { return ImVec4(r / 255.f, g / 255.f, b / 255.f, a); };

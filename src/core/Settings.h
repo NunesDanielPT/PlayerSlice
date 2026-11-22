@@ -38,6 +38,7 @@ struct Settings {
     std::string audioName;
     bool        outputsOffBlack = true;   // ao desligar: true = preto, false = fechar janela
     bool        startOutputsLive = false; // ligar saídas ao abrir um projeto
+    bool        lockMouseOutputs = true;  // o rato não entra nos ecrãs que estão a ser usados como saída
     bool        checkUpdates = true;      // procurar atualizações ao abrir
     // performance
     int         priority = 2;             // 0 normal, 1 acima do normal, 2 alta

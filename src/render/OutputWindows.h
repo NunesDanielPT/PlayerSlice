@@ -21,6 +21,7 @@ public:
     void closeAll();
     int  count() const { return (int)m_wins.size(); }
     bool coversMonitor(HMONITOR m) const;
+    std::vector<RECT> monitorRects() const;   // monitores ocupados por saídas em ecrã inteiro
 
     static LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);
 

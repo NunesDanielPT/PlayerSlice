@@ -46,6 +46,7 @@ void sectionGeneral(App& app) {
     if (ImGui::RadioButton(T("Mostrar preto (recomendado em espetáculo)"), s.outputsOffBlack)) { s.outputsOffBlack = true; save(); }
     if (ImGui::RadioButton(T("Fechar a janela (vê-se o ambiente de trabalho)"), !s.outputsOffBlack)) { s.outputsOffBlack = false; save(); }
     if (ImGui::Checkbox(T("Ligar as saídas automaticamente ao abrir um projeto"), &s.startOutputsLive)) save();
+    if (ImGui::Checkbox(T("O rato não entra nos ecrãs que estão a ser usados como saída"), &s.lockMouseOutputs)) save();
 
     ImGui::SeparatorText(T("Janelas"));
     if (ImGui::Button(T("Repor disposição das janelas"))) app.ui.layoutBuilt = false;
@@ -215,6 +216,12 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.4.2", {
+            "Clips novos entram no tamanho e proporção nativos.",
+            "Moldura de transformação nos monitores de Preview e Programa: mover e esticar o clip com o rato (Shift = proporção, duplo clique = nativo).",
+            "Painéis podem ir para outros monitores; os ecrãs usados como saída ficam trancados (o rato não entra e nada fica à frente).",
+            "Editor de saídas: trancar slices e ecrãs, duplo clique para mudar o nome, preenchimento das slices mais suave e ajustável.",
+        }},
         {"0.4.1", {
             "Clip Time como no Resolume: hora do sistema, clip e layer selecionados e cada layer com o tempo que falta.",
             "Link do Clip Time na rede: qualquer pessoa na mesma rede vê o Clip Time num browser (telemóvel, tablet, PC).",

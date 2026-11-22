@@ -36,6 +36,10 @@ struct UIState {
     bool     showAdvOutput = false;   // janela "Saída avançada"
     bool     editPoints = false;      // editor: modo Editar pontos
     bool     handTool = false;        // editor: ferramenta mão
+    bool     monitorGizmo = true;     // moldura de transformação nos monitores
+    float    sliceFill = 0.15f;       // editor: opacidade do preenchimento das slices
+    uint32_t renameSlice = 0;         // editor: slice a renomear (duplo clique)
+    bool     openRenameSlice = false;
     bool     layoutBuilt = false;
     // seleção múltipla de clips (id da layer, coluna) + âncora para Shift+clique
     std::set<std::pair<uint32_t, int>> selCells;

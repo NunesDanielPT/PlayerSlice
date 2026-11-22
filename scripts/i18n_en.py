@@ -243,6 +243,18 @@ EN = {
 'Link do Clip Time na rede: qualquer pessoa na mesma rede vê o Clip Time num browser (telemóvel, tablet, PC).':'Clip Time network link: anyone on the same network can see the Clip Time in a browser (phone, tablet, PC).',
 'Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.':'Animated test pattern (bar, hand and frame counter) to check that the output is smooth.',
 'Input Selection mostra no fundo a layer escolhida como fonte da slice.':'Input Selection shows the layer chosen as the slice source in the background.',
+'Moldura para mover e esticar o clip com o rato (Shift = proporção; duplo clique = tamanho nativo).':'Frame to move and stretch the clip with the mouse (Shift = keep ratio; double-click = native size).',
+'[trancada] ':'[locked] ','Slices:':'Slices:','Opacidade do preenchimento das slices no editor (mais baixo = vês melhor o vídeo por trás).':'Slice fill opacity in the editor (lower = you see the video behind better).',
+'Esta slice (ou o ecrã) está trancada. Destranca para mexer.':'This slice (or the screen) is locked. Unlock it to edit.','Nome da slice:':'Slice name:','Trancar':'Lock',
+'Trancar/destrancar esta slice (evita mexer sem querer).':'Lock/unlock this slice (prevents accidental changes).','  [trancado]':'  [locked]','Trancar ecrã':'Lock screen',
+'Trancar ecrã (as slices não se mexem)':'Lock screen (slices cannot be moved)','Trancada':'Locked','Trancada: não se mexe no canvas.':'Locked: cannot be moved on the canvas.',
+'O rato não entra nos ecrãs que estão a ser usados como saída':'The mouse cannot enter screens that are being used as outputs',
+'Esse monitor está a ser usado como saída — a janela voltou para o ecrã principal.':'That monitor is being used as an output — the window was moved back to the main screen.',
+'Esticar X':'Stretch X','Esticar Y':'Stretch Y',
+'Clips novos entram no tamanho e proporção nativos.':'New clips come in at their native size and aspect ratio.',
+'Moldura de transformação nos monitores de Preview e Programa: mover e esticar o clip com o rato (Shift = proporção, duplo clique = nativo).':'Transform frame on the Preview and Program monitors: move and stretch the clip with the mouse (Shift = keep ratio, double-click = native).',
+'Painéis podem ir para outros monitores; os ecrãs usados como saída ficam trancados (o rato não entra e nada fica à frente).':'Panels can go to other monitors; screens used as outputs are locked (the mouse cannot enter and nothing stays in front).',
+'Editor de saídas: trancar slices e ecrãs, duplo clique para mudar o nome, preenchimento das slices mais suave e ajustável.':'Output editor: lock slices and screens, double-click to rename, softer and adjustable slice fill.',
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
 

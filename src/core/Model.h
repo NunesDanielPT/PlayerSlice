@@ -35,10 +35,11 @@ struct Clip {
     LoopMode    loop = LoopMode::Loop;
     float       speed = 1.0f;
     float       opacity = 1.0f;
-    FitMode     fit = FitMode::Stretch;
+    FitMode     fit = FitMode::Native;   // entra no tamanho e proporção nativos
     // transformação dentro da região da layer (em píxeis da composição)
     float       offsetX = 0, offsetY = 0;
     float       scale = 1.0f;
+    float       scaleX = 1.0f, scaleY = 1.0f;   // esticar (não uniforme)
     float       rotation = 0.0f;   // graus
     bool        flipH = false, flipV = false;
     std::vector<Effect> effects;
@@ -96,6 +97,7 @@ struct Slice {
     float       opacity = 1.0f;
     float       brightness = 0.0f;  // -1..1
     uint32_t    color = 0;          // cor no editor/test pattern (RGBA)
+    bool        locked = false;     // trancada no editor (não se mexe sem querer)
     // warp de 4 pontos (perspetiva). Cantos: 0 topo-esq, 1 topo-dir, 2 baixo-dir, 3 baixo-esq
     bool        inWarp = false;     // entrada: quadrilátero livre na composição
     float       inPts[4][2] = {};
@@ -123,6 +125,7 @@ struct Screen {
     float       guideOpacity = 0.5f;
     bool        testPattern = false;
     bool        inToggle = true;    // incluído no atalho ligar/desligar saídas
+    bool        locked = false;     // trancado no editor (slices não se mexem)
     std::vector<Slice> slices;
 };
 

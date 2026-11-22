@@ -37,14 +37,16 @@ static void buildDefaultLayout(ImGuiID dock) {
     ImGui::DockBuilderFinish(dock);
 }
 
-static void fitImage(ImTextureID tex, float tw, float th, ImVec2 avail) {
+static void fitImage(ImTextureID tex, float tw, float th, ImVec2 avail, ImVec2* outMin = nullptr, float* outScale = nullptr) {
     if (tw <= 0 || th <= 0 || avail.x <= 0 || avail.y <= 0) return;
     float s = std::min(avail.x / tw, avail.y / th);
+    if (outScale) *outScale = s;
     ImVec2 sz(tw * s, th * s);
     ImVec2 c = ImGui::GetCursorScreenPos();
     ImGui::SetCursorScreenPos(ImVec2(c.x + (avail.x - sz.x) * 0.5f, c.y + (avail.y - sz.y) * 0.5f));
     ImGui::Image(tex, sz);
     ImVec2 p0 = ImGui::GetItemRectMin(), p1 = ImGui::GetItemRectMax();
+    if (outMin) *outMin = p0;
     ImGui::GetWindowDrawList()->AddRect(p0, p1, IM_COL32(70, 72, 78, 255));
 }
 
@@ -82,11 +84,106 @@ static void viewCombo(App& app, int& mode, uint32_t& id, const char* cid) {
     }
 }
 
-static void monitorImage(App& app, bool prev, int mode, uint32_t id, ImVec2 avail) {
+// ---------------------------------------------------------------------------
+// moldura de transformação do clip no monitor (mover / esticar com o rato)
+// ---------------------------------------------------------------------------
+struct ClipGizmoState {
+    bool active = false; int handle = -1; std::string mon;
+    ImVec2 mouse0; float offX = 0, offY = 0, sx = 1, sy = 1, w0 = 1, h0 = 1;
+};
+static ClipGizmoState g_cg;
+
+static void clipGizmo(App& app, bool prev, ImVec2 imgMin, float scale, const char* monId) {
+    Project& p = app.project;
+    int li = -1, ci = -1;
+    VideoPlayer* v = nullptr;
+    if (prev) {
+        if (!app.comp.hasPreview()) return;
+        li = p.layerIndex(app.comp.previewLayerId()); ci = app.comp.previewColumn();
+        v = app.comp.previewPlayer();
+    } else {
+        li = app.ui.selLayer; ci = app.ui.selColumn;
+        if (li < 0 || li >= (int)p.comp.layers.size() || p.comp.layers[li].activeColumn != ci) return;
+        v = app.comp.activePlayer(p.comp.layers[li].id);
+    }
+    if (li < 0 || li >= (int)p.comp.layers.size() || ci < 0 || ci >= (int)p.comp.layers[li].clips.size()) return;
+    Layer& l = p.comp.layers[li];
+    Clip& c = l.clips[ci];
+    if (c.empty() || !v || v->width() <= 0) return;
+    float px[4], py[4];
+    Compositor::clipCorners(p, l, c, (float)v->width(), (float)v->height(), px, py);
+    ImVec2 q[4];   // TL, TR, BR, BL no ecrã
+    const int ord[4] = {0, 1, 3, 2};
+    for (int i = 0; i < 4; ++i) q[i] = ImVec2(imgMin.x + px[ord[i]] * scale, imgMin.y + py[ord[i]] * scale);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    const bool mine = g_cg.active && g_cg.mon == monId;
+    dl->AddQuad(q[0], q[1], q[2], q[3], mine ? col::Accent : IM_COL32(64, 224, 192, 170), 1.5f);
+    // pegas: 0 TL, 1 TR, 2 BR, 3 BL
+    const int hx[4] = {-1, 1, 1, -1}, hy[4] = {-1, -1, 1, 1};
+    const float hp = 5.f;
+    int hoverH = -1;
+    for (int i = 0; i < 4; ++i) {
+        dl->AddRectFilled(ImVec2(q[i].x - hp, q[i].y - hp), ImVec2(q[i].x + hp, q[i].y + hp), IM_COL32(255, 255, 255, 255));
+        dl->AddRect(ImVec2(q[i].x - hp, q[i].y - hp), ImVec2(q[i].x + hp, q[i].y + hp), IM_COL32(0, 0, 0, 255));
+        if (std::fabs(io.MousePos.x - q[i].x) <= hp + 2 && std::fabs(io.MousePos.y - q[i].y) <= hp + 2) hoverH = i;
+    }
+    // dentro do quadrilátero?
+    auto inside = [&](ImVec2 m) {
+        bool in = false;
+        for (int i = 0, j = 3; i < 4; j = i++)
+            if (((q[i].y > m.y) != (q[j].y > m.y)) && (m.x < (q[j].x - q[i].x) * (m.y - q[i].y) / (q[j].y - q[i].y) + q[i].x)) in = !in;
+        return in;
+    };
+    bool winHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+    if (!g_cg.active && winHovered) {
+        if (hoverH >= 0) ImGui::SetMouseCursor((hx[hoverH] == hy[hoverH]) ? ImGuiMouseCursor_ResizeNWSE : ImGuiMouseCursor_ResizeNESW);
+        else if (inside(io.MousePos)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && inside(io.MousePos)) {
+            app.checkpoint(); c.offsetX = c.offsetY = 0; c.scale = c.scaleX = c.scaleY = 1; c.rotation = 0;
+        } else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && (hoverH >= 0 || inside(io.MousePos))) {
+            app.checkpoint();
+            g_cg = {};
+            g_cg.active = true; g_cg.handle = hoverH; g_cg.mon = monId;
+            g_cg.mouse0 = io.MousePos;
+            g_cg.offX = c.offsetX; g_cg.offY = c.offsetY; g_cg.sx = c.scaleX; g_cg.sy = c.scaleY;
+            g_cg.w0 = std::hypot(px[1] - px[0], py[1] - py[0]);
+            g_cg.h0 = std::hypot(px[2] - px[0], py[2] - py[0]);
+        }
+    }
+    if (mine) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) { g_cg.active = false; return; }
+        // delta em píxeis da composição, no referencial da layer (desfazer escala da layer)
+        float ls = std::max(0.01f, l.scale);
+        float dx = (io.MousePos.x - g_cg.mouse0.x) / scale / ls, dy = (io.MousePos.y - g_cg.mouse0.y) / scale / ls;
+        if (g_cg.handle < 0) {
+            if (io.KeyShift) { if (std::fabs(dx) > std::fabs(dy)) dy = 0; else dx = 0; }
+            c.offsetX = std::round(g_cg.offX + dx); c.offsetY = std::round(g_cg.offY + dy);
+        } else {
+            int h = g_cg.handle;
+            float w0 = std::max(1.f, g_cg.w0 / ls), h0 = std::max(1.f, g_cg.h0 / ls);
+            float nw = std::max(4.f, w0 + hx[h] * dx), nh = std::max(4.f, h0 + hy[h] * dy);
+            if (io.KeyShift) { float k = std::max(nw / w0, nh / h0); nw = w0 * k; nh = h0 * k; }   // manter proporção
+            c.scaleX = g_cg.sx * nw / w0;
+            c.scaleY = g_cg.sy * nh / h0;
+            // a esquina oposta fica parada
+            c.offsetX = g_cg.offX + hx[h] * (nw - w0) * 0.5f;
+            c.offsetY = g_cg.offY + hy[h] * (nh - h0) * 0.5f;
+        }
+        app.markDirty();
+        char info[80];
+        snprintf(info, sizeof(info), "%.0f, %.0f  ·  %.0f%% x %.0f%%", c.offsetX, c.offsetY, c.scale * c.scaleX * 100, c.scale * c.scaleY * 100);
+        dl->AddText(ImVec2(q[0].x + 4, q[0].y - 18), col::Accent, info);
+    }
+}
+
+static void monitorImage(App& app, bool prev, int mode, uint32_t id, ImVec2 avail, const char* monId) {
     Project& p = app.project;
     if (mode == 0) {
         const RenderTarget& rt = prev ? app.comp.previewRT() : app.comp.compRT();
-        if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, avail);
+        ImVec2 imgMin; float sc = 0;
+        if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, avail, &imgMin, &sc);
+        if (sc > 0 && app.ui.monitorGizmo) clipGizmo(app, prev, imgMin, sc, monId);
     } else if (mode == 1) {
         const RenderTarget* rt = nullptr;
         if (prev) { app.comp.requestPreviewScreen(id); rt = app.comp.previewScreenRT(id); }
@@ -124,6 +221,9 @@ static void monitorPanel(App& app, bool prev, int& mode, uint32_t& id, const cha
         if (ImGui::Button(T("Limpar"))) app.comp.clearPreview();
         ImGui::EndDisabled();
         if (has) { ImGui::SameLine(); ImGui::TextDisabled("%s", app.comp.previewClipInfo().name.c_str()); }
+        ImGui::SameLine();
+        ImGui::Checkbox(T("Transformar"), &app.ui.monitorGizmo);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Moldura para mover e esticar o clip com o rato (Shift = proporção; duplo clique = tamanho nativo)."));
     } else {
         int playing = 0;
         for (auto& l : app.project.comp.layers) if (l.activeColumn >= 0) playing++;
@@ -131,7 +231,7 @@ static void monitorPanel(App& app, bool prev, int& mode, uint32_t& id, const cha
         ImGui::SameLine();
         if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
     }
-    monitorImage(app, prev, mode, id, ImGui::GetContentRegionAvail());
+    monitorImage(app, prev, mode, id, ImGui::GetContentRegionAvail(), cid);
     ImGui::EndChild();
 }
 
@@ -451,6 +551,20 @@ void drawUI(App& app) {
     compSettingsPopup(app);
     drawSettings(app);
     drawUpdatePopup(app);
+
+    // painéis soltos não podem ficar num monitor que está a ser usado como saída
+    {
+        ImGuiContext& g = *ImGui::GetCurrentContext();
+        ImGuiViewport* mainVp = ImGui::GetMainViewport();
+        for (ImGuiWindow* w : g.Windows) {
+            if (!w->WasActive || w->ParentWindow || (w->Flags & ImGuiWindowFlags_ChildWindow) || !w->Viewport || w->Viewport == mainVp || w->DockIsActive) continue;
+            POINT c{(LONG)(w->Pos.x + w->Size.x * 0.5f), (LONG)(w->Pos.y + w->Size.y * 0.5f)};
+            if (app.outputs.coversMonitor(MonitorFromPoint(c, MONITOR_DEFAULTTONULL))) {
+                ImGui::SetWindowPos(w, ImVec2(mainVp->WorkPos.x + 80, mainVp->WorkPos.y + 80));
+                PS_WARN("%s", T("Esse monitor está a ser usado como saída — a janela voltou para o ecrã principal."));
+            }
+        }
+    }
 
     // aviso: saída em ecrã cheio por cima da interface
     HMONITOR mine = MonitorFromWindow(app.hwnd(), MONITOR_DEFAULTTONEAREST);

@@ -56,6 +56,9 @@ public:
 
     void shutdown();
 
+    // cantos do clip na composição (TL, TR, BL, BR) — usado no desenho e na moldura de transformação
+    static void clipCorners(const Project& p, const Layer& l, const Clip& c, float vw, float vh, float px[4], float py[4]);
+
 private:
     void drawLayer(const Project& p, const Layer& l, LayerRuntime& rt, double now);
     void drawClip(const Project& p, const Layer& l, const Clip& c, VideoPlayer& v, float opacity);
