@@ -423,6 +423,7 @@ int App::run(HINSTANCE inst) {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigDebugHighlightIdConflicts = false;
     static std::string iniPath = toUtf8(dir + L"\\layout-v2.ini");
     io.IniFilename = iniPath.c_str();
     ImGui_ImplWin32_Init(m_hwnd);

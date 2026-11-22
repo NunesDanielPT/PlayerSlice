@@ -151,6 +151,9 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.2.2", {
+            "Correção: clicar num clip podia disparar o clip de outra layer na mesma coluna.",
+        }},
         {"0.2.1", {
             "Correção: depois de atualizar da 0.1.0 as janelas ficavam soltas e pequenas; a disposição é reposta automaticamente.",
         }},

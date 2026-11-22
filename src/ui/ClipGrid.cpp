@@ -117,6 +117,9 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
     Project& p = app.project;
     Layer& l = p.comp.layers[li];
     Clip& c = l.clips[ci];
+    // ID único por célula: layer + coluna (antes só a coluna → conflito entre layers)
+    ImGui::PushID("cell");
+    ImGui::PushID((int)l.id);
     ImGui::PushID(ci);
     ImVec2 p0 = ImGui::GetCursorScreenPos();
     ImVec2 p1(p0.x + cellW, p0.y + cellH);
@@ -228,6 +231,8 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
         }
         ImGui::EndPopup();
     }
+    ImGui::PopID();
+    ImGui::PopID();
     ImGui::PopID();
 }
 
