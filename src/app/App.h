@@ -5,6 +5,7 @@
 #include "render/Compositor.h"
 #include "render/OutputWindows.h"
 #include <deque>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,8 @@ struct UIState {
     bool     showGrid = false;
     int      gridSize = 16;
     bool     showAbout = false;
+    bool     showSettings = false;
+    int      settingsTab = 0;
     bool     showCompSettings = false;
     bool     showLog = false;
     bool     focusEditor = false;
@@ -43,6 +46,16 @@ public:
     bool         dirty = false;
     double       fps = 0;
     double       frameMs = 0;
+
+    // saídas ligadas (estado em execução, não gravado no projeto)
+    std::set<uint32_t> liveScreens;
+    bool isLive(uint32_t id) const { return liveScreens.count(id) > 0; }
+    bool anyLive() const { return !liveScreens.empty(); }
+    void toggleOutputs();          // ecrãs marcados "no atalho" (ou todos se nenhum)
+    void setAllOutputs(bool on);
+    void setOutput(uint32_t id, bool on);
+    void runAction(int action);    // Action (Settings.h)
+    void applyLanguage();
 
     // ficheiros
     void newProject();
@@ -69,6 +82,7 @@ public:
     HWND hwnd() const { return m_hwnd; }
     static App* instance();
     void emergencySave();
+    void quitForUpdate() { dirty = false; m_running = false; }
 
 private:
     bool initWindow(HINSTANCE inst);

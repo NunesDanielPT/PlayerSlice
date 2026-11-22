@@ -1,5 +1,6 @@
 #include "gfx/Displays.h"
 #include "core/Log.h"
+#include "core/I18n.h"
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <map>
@@ -14,8 +15,8 @@ std::string DisplayInfo::label() const {
     auto p = k.find("DISPLAY");
     std::string num = p != std::string::npos ? k.substr(p + 7) : k;
     snprintf(buf, sizeof(buf), "%s: %s  %dx%d @%dHz%s", num.c_str(),
-             friendly.empty() ? "Monitor" : friendly.c_str(), width(), height(), refreshHz,
-             primary ? "  (principal)" : "");
+             friendly.empty() ? T("Monitor") : friendly.c_str(), width(), height(), refreshHz,
+             primary ? T("  (principal)") : "");
     return buf;
 }
 

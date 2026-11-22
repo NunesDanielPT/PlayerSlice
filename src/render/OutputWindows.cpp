@@ -116,10 +116,11 @@ bool OutputWindows::resize(Win& w) {
     return true;
 }
 
-void OutputWindows::sync(const Project& p, const std::vector<DisplayInfo>& displays, HWND) {
+void OutputWindows::sync(const Project& p, const std::vector<DisplayInfo>& displays, const LiveFn& live, bool offBlack) {
     std::set<uint32_t> keep;
     for (const Screen& s : p.screens) {
         if (s.device == ScreenDevice::Disabled) continue;
+        if (!live(s.id) && !offBlack) continue;
         const DisplayInfo* d = nullptr;
         if (s.device == ScreenDevice::Monitor) {
             for (auto& di : displays) if (di.key == s.monitorKey) { d = &di; break; }
@@ -149,13 +150,13 @@ bool OutputWindows::coversMonitor(HMONITOR m) const {
     return false;
 }
 
-void OutputWindows::present(const Project& p, const Compositor& comp, bool& didVsync) {
+void OutputWindows::present(const Compositor& comp, const LiveFn& live, bool& didVsync) {
     Gfx& G = gfx();
     bool first = true;
     for (auto& [id, w] : m_wins) {
         if (w.needResize) resize(w);
         if (!w.rtv) continue;
-        const RenderTarget* src = comp.screenRT(id);
+        const RenderTarget* src = live(id) ? comp.screenRT(id) : nullptr; // desligada → preto
         G.setTarget(w.rtv.Get(), w.w, w.h);
         G.clear(w.rtv.Get(), 0, 0, 0, 1);
         if (src) {
@@ -176,7 +177,6 @@ void OutputWindows::present(const Project& p, const Compositor& comp, bool& didV
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
             PS_ERROR("GPU removida/reiniciada (0x%08lX)", (unsigned long)G.dev()->GetDeviceRemovedReason());
     }
-    (void)p;
 }
 
 void OutputWindows::closeAll() {

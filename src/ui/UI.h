@@ -13,6 +13,12 @@ void drawUI(App& app);
 void drawClipGrid(App& app);
 void drawSliceEditor(App& app);
 void drawProperties(App& app);
+void drawSettings(App& app);
+void drawUpdateStatus(App& app, bool compact);
+void drawUpdatePopup(App& app);
+bool shortcutCaptureActive();
+// título traduzido com ID fixo (o layout não se perde ao mudar de idioma)
+std::string winTitle(const char* pt, const char* id);
 
 // helpers partilhados
 ImTextureID texId(void* srv);

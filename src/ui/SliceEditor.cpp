@@ -4,6 +4,7 @@
 // Tudo arrastável: mover, redimensionar pelos 8 pegas, rodar (só na saída),
 // snap a bordas/centros, setas para afinar ao píxel, roda do rato para zoom.
 #include "ui/UI.h"
+#include "core/I18n.h"
 #include "app/App.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -130,9 +131,9 @@ Screen* selectedScreen(App& app) {
 // ---------------------------------------------------------------------------
 void screenList(App& app) {
     Project& p = app.project;
-    if (ImGui::Button("+ Ecrã", ImVec2(-1, 0))) {
+    if (ImGui::Button(T("+ Ecrã"), ImVec2(-1, 0))) {
         app.checkpoint();
-        Screen& s = p.addScreen("Saída " + std::to_string(p.screens.size() + 1));
+        Screen& s = p.addScreen(T("Saída ") + std::to_string(p.screens.size() + 1));
         app.ui.selScreen = s.id; app.ui.selSlice = 0;
     }
     ImGui::Separator();
@@ -143,22 +144,22 @@ void screenList(App& app) {
         bool selS = app.ui.selScreen == s.id;
         ImGuiTreeNodeFlags tf = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
         if (selS && app.ui.selSlice == 0) tf |= ImGuiTreeNodeFlags_Selected;
-        const char* dev = s.device == ScreenDevice::Monitor ? "" : s.device == ScreenDevice::Window ? "  [janela]" : "  [desligado]";
-        bool open = ImGui::TreeNodeEx("##scr", tf, "%s%s", s.name.c_str(), dev);
+        const char* dev = s.device == ScreenDevice::Monitor ? "" : s.device == ScreenDevice::Window ? T("  [janela]") : T("  [desligado]");
+        bool open = ImGui::TreeNodeEx("##scr", tf, "%s%s%s", s.name.c_str(), dev, app.isLive(s.id) ? T("  ● NO AR") : "");
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) { app.ui.selScreen = s.id; app.ui.selSlice = 0; }
         if (ImGui::BeginPopupContextItem("scrctx")) {
-            if (ImGui::MenuItem("Adicionar slice")) {
+            if (ImGui::MenuItem(T("Adicionar slice"))) {
                 app.checkpoint();
-                Slice& sl = p.addSlice(s, "Slice " + std::to_string(s.slices.size() + 1));
+                Slice& sl = p.addSlice(s, T("Slice ") + std::to_string(s.slices.size() + 1));
                 app.ui.selScreen = s.id; app.ui.selSlice = sl.id;
             }
-            if (ImGui::MenuItem("Duplicar ecrã")) {
+            if (ImGui::MenuItem(T("Duplicar ecrã"))) {
                 app.checkpoint();
-                Screen copy = s; copy.id = p.newId(); copy.name += " (cópia)"; copy.device = ScreenDevice::Disabled;
+                Screen copy = s; copy.id = p.newId(); copy.name += T(" (cópia)"); copy.device = ScreenDevice::Disabled;
                 for (auto& sl : copy.slices) sl.id = p.newId();
                 p.screens.insert(p.screens.begin() + si + 1, copy);
             }
-            if (ImGui::MenuItem("Apagar ecrã")) delScreen = si;
+            if (ImGui::MenuItem(T("Apagar ecrã"))) delScreen = si;
             ImGui::EndPopup();
         }
         if (open) {
@@ -193,9 +194,9 @@ void screenList(App& app) {
                 }
                 ImGui::PopID();
             }
-            if (ImGui::SmallButton("+ Slice")) {
+            if (ImGui::SmallButton(T("+ Slice"))) {
                 app.checkpoint();
-                Slice& sl = p.addSlice(s, "Slice " + std::to_string(s.slices.size() + 1));
+                Slice& sl = p.addSlice(s, T("Slice ") + std::to_string(s.slices.size() + 1));
                 app.ui.selScreen = s.id; app.ui.selSlice = sl.id;
             }
             ImGui::TreePop();
@@ -214,19 +215,19 @@ void screenList(App& app) {
 // propriedades (direita)
 // ---------------------------------------------------------------------------
 void screenProps(App& app, Screen& s) {
-    ImGui::SeparatorText("Ecrã");
-    inputTextStd("Nome##scr", s.name);
+    ImGui::SeparatorText(T("Ecrã"));
+    inputTextStd(T("Nome##scr"), s.name);
     undoOnActivate(app);
 
     // dispositivo: desligado / janela / saída física da gráfica
-    std::string cur = s.device == ScreenDevice::Disabled ? "Desligado" : s.device == ScreenDevice::Window ? "Janela (teste)" : s.monitorKey;
+    std::string cur = s.device == ScreenDevice::Disabled ? T("Desligado") : s.device == ScreenDevice::Window ? T("Janela (teste)") : s.monitorKey;
     for (auto& d : app.displays) if (s.device == ScreenDevice::Monitor && d.key == s.monitorKey) cur = d.label();
     bool missing = s.device == ScreenDevice::Monitor &&
                    std::none_of(app.displays.begin(), app.displays.end(), [&](const DisplayInfo& d) { return d.key == s.monitorKey; });
-    if (missing) cur += "  (SEM SINAL)";
-    if (ImGui::BeginCombo("Saída", cur.c_str())) {
-        if (ImGui::Selectable("Desligado", s.device == ScreenDevice::Disabled)) { app.checkpoint(); s.device = ScreenDevice::Disabled; }
-        if (ImGui::Selectable("Janela (teste)", s.device == ScreenDevice::Window)) { app.checkpoint(); s.device = ScreenDevice::Window; }
+    if (missing) cur += T("  (SEM SINAL)");
+    if (ImGui::BeginCombo(T("Saída"), cur.c_str())) {
+        if (ImGui::Selectable(T("Desligado"), s.device == ScreenDevice::Disabled)) { app.checkpoint(); s.device = ScreenDevice::Disabled; }
+        if (ImGui::Selectable(T("Janela (teste)"), s.device == ScreenDevice::Window)) { app.checkpoint(); s.device = ScreenDevice::Window; }
         ImGui::Separator();
         for (auto& d : app.displays) {
             bool sel = s.device == ScreenDevice::Monitor && s.monitorKey == d.key;
@@ -236,21 +237,28 @@ void screenProps(App& app, Screen& s) {
                 s.device = ScreenDevice::Monitor;
                 s.monitorKey = d.key;
                 s.width = d.width(); s.height = d.height();
-                if (d.primary) PS_WARN("Atenção: '%s' é o monitor principal — a saída vai tapar a interface.", d.label().c_str());
+                if (d.primary) PS_WARN(T("Atenção: '%s' é o monitor principal — a saída vai tapar a interface."), d.label().c_str());
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", d.adapter.c_str());
         }
         ImGui::EndCombo();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Placa: %s", toUtf8(gfx().adapterName()).c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Placa: %s"), toUtf8(gfx().adapterName()).c_str());
 
     int wh[2] = {s.width, s.height};
-    if (ImGui::InputInt2("Resolução", wh)) { s.width = std::clamp(wh[0], 16, 16384); s.height = std::clamp(wh[1], 16, 16384); }
+    if (ImGui::InputInt2(T("Resolução"), wh)) { s.width = std::clamp(wh[0], 16, 16384); s.height = std::clamp(wh[1], 16, 16384); }
     undoOnActivate(app);
-    ImGui::SliderFloat("Brilho##scr", &s.brightness, -1, 1, "%.2f");
+    ImGui::SliderFloat(T("Brilho##scr"), &s.brightness, -1, 1, "%.2f");
     undoOnActivate(app);
-    if (ImGui::Checkbox("Test pattern", &s.testPattern)) app.markDirty();
-    if (ImGui::Button("Ajustar resolução às slices")) {
+    if (ImGui::Checkbox(T("Test pattern"), &s.testPattern)) app.markDirty();
+    if (s.device != ScreenDevice::Disabled) {
+        bool on = app.isLive(s.id);
+        if (ImGui::Checkbox(T("Saída ligada"), &on)) app.setOutput(s.id, on);
+        ImGui::SameLine();
+    }
+    if (ImGui::Checkbox(T("No atalho"), &s.inToggle)) app.markDirty();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Este ecrã liga/desliga com o atalho das saídas."));
+    if (ImGui::Button(T("Ajustar resolução às slices"))) {
         app.checkpoint();
         float mx = 16, my = 16;
         for (auto& sl : s.slices) { mx = std::max(mx, sl.outX + sl.outW * 0.5f); my = std::max(my, sl.outY + sl.outH * 0.5f); }
@@ -260,55 +268,55 @@ void screenProps(App& app, Screen& s) {
 
 void sliceProps(App& app, Screen& s, Slice& sl) {
     Project& p = app.project;
-    ImGui::SeparatorText("Slice");
-    inputTextStd("Nome##sl", sl.name);
+    ImGui::SeparatorText(T("Slice"));
+    inputTextStd(T("Nome##sl"), sl.name);
     undoOnActivate(app);
 
     int srcIdx = sl.sourceLayer ? p.layerIndex(sl.sourceLayer) : -1;
-    std::string src = srcIdx < 0 ? "Composição" : p.comp.layers[srcIdx].name;
-    if (ImGui::BeginCombo("Fonte", src.c_str())) {
-        if (ImGui::Selectable("Composição", srcIdx < 0)) { app.checkpoint(); sl.sourceLayer = 0; }
+    std::string src = srcIdx < 0 ? T("Composição") : p.comp.layers[srcIdx].name;
+    if (ImGui::BeginCombo(T("Fonte"), src.c_str())) {
+        if (ImGui::Selectable(T("Composição"), srcIdx < 0)) { app.checkpoint(); sl.sourceLayer = 0; }
         for (int i = 0; i < (int)p.comp.layers.size(); ++i) {
             std::string n = p.comp.layers[i].name + "##" + std::to_string(p.comp.layers[i].id);
             if (ImGui::Selectable(n.c_str(), srcIdx == i)) { app.checkpoint(); sl.sourceLayer = p.comp.layers[i].id; }
         }
         ImGui::EndCombo();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Composição = todas as layers misturadas.\nLayer = só essa layer (dedicar layers a uma saída).");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Composição = todas as layers misturadas.\nLayer = só essa layer (dedicar layers a uma saída)."));
 
-    ImGui::TextDisabled("Entrada (recorte da composição)");
+    ImGui::TextDisabled(T("Entrada (recorte da composição)"));
     rectEditor(app, "in", sl.input, (float)p.comp.width, (float)p.comp.height);
 
-    ImGui::TextDisabled("Saída (posição no ecrã)");
+    ImGui::TextDisabled(T("Saída (posição no ecrã)"));
     Rect o{sl.outX - sl.outW * 0.5f, sl.outY - sl.outH * 0.5f, sl.outW, sl.outH};
     if (rectEditor(app, "out", o, (float)s.width, (float)s.height)) {
         sl.outW = o.w; sl.outH = o.h; sl.outX = o.x + o.w * 0.5f; sl.outY = o.y + o.h * 0.5f;
     }
-    ImGui::DragFloat("Rotação", &sl.rotation, 0.25f, -360, 360, "%.2f°");
+    ImGui::DragFloat(T("Rotação"), &sl.rotation, 0.25f, -360, 360, T("%.2f°"));
     undoOnActivate(app);
     ImGui::SameLine();
     if (ImGui::SmallButton("90°")) { app.checkpoint(); sl.rotation = std::fmod(sl.rotation + 90.f, 360.f); }
-    if (ImGui::Checkbox("Espelhar H", &sl.flipH)) app.checkpoint();
+    if (ImGui::Checkbox(T("Espelhar H"), &sl.flipH)) app.checkpoint();
     ImGui::SameLine();
-    if (ImGui::Checkbox("Espelhar V", &sl.flipV)) app.checkpoint();
-    ImGui::SliderFloat("Opacidade##sl", &sl.opacity, 0, 1, "%.2f");
+    if (ImGui::Checkbox(T("Espelhar V"), &sl.flipV)) app.checkpoint();
+    ImGui::SliderFloat(T("Opacidade##sl"), &sl.opacity, 0, 1, "%.2f");
     undoOnActivate(app);
-    ImGui::SliderFloat("Brilho##sl", &sl.brightness, -1, 1, "%.2f");
+    ImGui::SliderFloat(T("Brilho##sl"), &sl.brightness, -1, 1, "%.2f");
     undoOnActivate(app);
     float c[3] = {(sl.color & 0xFF) / 255.f, ((sl.color >> 8) & 0xFF) / 255.f, ((sl.color >> 16) & 0xFF) / 255.f};
-    if (ImGui::ColorEdit3("Cor", c, ImGuiColorEditFlags_NoInputs)) {
+    if (ImGui::ColorEdit3(T("Cor"), c, ImGuiColorEditFlags_NoInputs)) {
         sl.color = 0xFF000000u | ((uint32_t)(c[2] * 255) << 16) | ((uint32_t)(c[1] * 255) << 8) | (uint32_t)(c[0] * 255);
     }
     undoOnActivate(app);
 
-    ImGui::SeparatorText("Atalhos");
-    if (ImGui::Button("Saída 1:1 (= tamanho da entrada)", ImVec2(-1, 0))) {
+    ImGui::SeparatorText(T("Atalhos"));
+    if (ImGui::Button(T("Saída 1:1 (= tamanho da entrada)"), ImVec2(-1, 0))) {
         app.checkpoint(); sl.outW = sl.input.w; sl.outH = sl.input.h;
     }
-    if (ImGui::Button("Entrada = Saída (mesma posição)", ImVec2(-1, 0))) {
+    if (ImGui::Button(T("Entrada = Saída (mesma posição)"), ImVec2(-1, 0))) {
         app.checkpoint(); sl.input = {sl.outX - sl.outW * 0.5f, sl.outY - sl.outH * 0.5f, sl.outW, sl.outH};
     }
-    if (ImGui::Button("Criar layer dedicada a esta slice", ImVec2(-1, 0))) {
+    if (ImGui::Button(T("Criar layer dedicada a esta slice"), ImVec2(-1, 0))) {
         // fluxo típico: os clientes entregam o vídeo no formato exato do ledwall
         app.checkpoint();
         Layer& l = p.addLayer(sl.name);
@@ -316,7 +324,7 @@ void sliceProps(App& app, Screen& s, Slice& sl) {
         l.region = sl.input;
         app.ui.selLayer = 0;
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cria uma layer cuja região é o recorte desta slice.\nOs vídeos dessa layer encaixam automaticamente aqui.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Cria uma layer cuja região é o recorte desta slice.\nOs vídeos dessa layer encaixam automaticamente aqui."));
 }
 
 // ---------------------------------------------------------------------------
@@ -538,7 +546,7 @@ void canvas(App& app, Screen& sc) {
         } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) {
             app.checkpoint();
             Slice copy = *selected;
-            copy.id = p.newId(); copy.name += " (cópia)";
+            copy.id = p.newId(); copy.name += T(" (cópia)");
             copy.input.x += 20; copy.input.y += 20; copy.outX += 20; copy.outY += 20;
             sc.slices.push_back(copy);
             app.ui.selSlice = copy.id; selected = &sc.slices.back();
@@ -607,9 +615,9 @@ void canvas(App& app, Screen& sc) {
 
     // menu de contexto
     if (ImGui::BeginPopupContextItem("canvasctx")) {
-        if (ImGui::MenuItem("Adicionar slice aqui")) {
+        if (ImGui::MenuItem(T("Adicionar slice aqui"))) {
             app.checkpoint();
-            Slice& n = p.addSlice(sc, "Slice " + std::to_string(sc.slices.size() + 1));
+            Slice& n = p.addSlice(sc, T("Slice ") + std::to_string(sc.slices.size() + 1));
             ERect r = getRect(n, tab);
             r.x = std::round(mouseC.x - r.w * 0.5f); r.y = std::round(mouseC.y - r.h * 0.5f);
             setRect(n, tab, r);
@@ -617,18 +625,18 @@ void canvas(App& app, Screen& sc) {
             selected = nullptr;
         }
         if (selected) {
-            if (ImGui::MenuItem("Duplicar", "Ctrl+D")) {
+            if (ImGui::MenuItem(T("Duplicar"), "Ctrl+D")) {
                 app.checkpoint();
-                Slice copy = *selected; copy.id = p.newId(); copy.name += " (cópia)";
+                Slice copy = *selected; copy.id = p.newId(); copy.name += T(" (cópia)");
                 copy.input.x += 20; copy.input.y += 20; copy.outX += 20; copy.outY += 20;
                 sc.slices.push_back(copy); app.ui.selSlice = copy.id; selected = nullptr;
             }
-            if (selected && ImGui::MenuItem("Rodar 90°", nullptr, false, tab == 1)) { app.checkpoint(); selected->rotation = std::fmod(selected->rotation + 90.f, 360.f); }
-            if (selected && ImGui::MenuItem("Saída 1:1")) { app.checkpoint(); selected->outW = selected->input.w; selected->outH = selected->input.h; }
-            if (selected && ImGui::MenuItem("Ocupar o canvas inteiro")) {
+            if (selected && ImGui::MenuItem(T("Rodar 90°"), nullptr, false, tab == 1)) { app.checkpoint(); selected->rotation = std::fmod(selected->rotation + 90.f, 360.f); }
+            if (selected && ImGui::MenuItem(T("Saída 1:1"))) { app.checkpoint(); selected->outW = selected->input.w; selected->outH = selected->input.h; }
+            if (selected && ImGui::MenuItem(T("Ocupar o canvas inteiro"))) {
                 app.checkpoint(); setRect(*selected, tab, ERect{0, 0, cw, ch, 0});
             }
-            if (selected && ImGui::MenuItem("Apagar", "Del")) {
+            if (selected && ImGui::MenuItem(T("Apagar"), "Del")) {
                 app.checkpoint();
                 uint32_t id = selected->id;
                 sc.slices.erase(std::remove_if(sc.slices.begin(), sc.slices.end(), [&](const Slice& x) { return x.id == id; }), sc.slices.end());
@@ -645,18 +653,18 @@ bool rectEditor(App& app, const char* id, Rect& r, float maxW, float maxH) {
     ImGui::PushID(id);
     bool changed = false;
     float xy[2] = {r.x, r.y}, wh[2] = {r.w, r.h};
-    if (ImGui::DragFloat2("X / Y", xy, 1.f, -maxW * 4, maxW * 4, "%.0f")) { r.x = std::round(xy[0]); r.y = std::round(xy[1]); changed = true; }
+    if (ImGui::DragFloat2(T("X / Y"), xy, 1.f, -maxW * 4, maxW * 4, "%.0f")) { r.x = std::round(xy[0]); r.y = std::round(xy[1]); changed = true; }
     undoOnActivate(app);
-    if (ImGui::DragFloat2("L / A", wh, 1.f, 1.f, std::max(maxW, maxH) * 8, "%.0f")) { r.w = std::max(1.f, std::round(wh[0])); r.h = std::max(1.f, std::round(wh[1])); changed = true; }
+    if (ImGui::DragFloat2(T("L / A"), wh, 1.f, 1.f, std::max(maxW, maxH) * 8, "%.0f")) { r.w = std::max(1.f, std::round(wh[0])); r.h = std::max(1.f, std::round(wh[1])); changed = true; }
     undoOnActivate(app);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Largura / Altura em píxeis");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Largura / Altura em píxeis"));
     ImGui::PopID();
     return changed;
 }
 
 void drawSliceEditor(App& app) {
     if (app.ui.focusEditor) { ImGui::SetNextWindowFocus(); app.ui.focusEditor = false; }
-    if (!ImGui::Begin("Saídas e Slices")) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Saídas e Slices", "slices").c_str())) { ImGui::End(); return; }
     Screen* sc = selectedScreen(app);
 
     // esquerda: ecrãs/slices
@@ -669,35 +677,36 @@ void drawSliceEditor(App& app) {
     float propsW = 290;
     ImGui::BeginChild("center", ImVec2(ImGui::GetContentRegionAvail().x - propsW - 8, 0), ImGuiChildFlags_None);
     if (ImGui::BeginTabBar("tabs")) {
-        if (ImGui::BeginTabItem("Entrada  (Input Selection)", nullptr, app.ui.editorTab == 0 && ImGui::GetFrameCount() < 3 ? ImGuiTabItemFlags_SetSelected : 0)) { app.ui.editorTab = 0; ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Saída  (Output Transformation)", nullptr, app.ui.editorTab == 1 && ImGui::GetFrameCount() < 3 ? ImGuiTabItemFlags_SetSelected : 0)) { app.ui.editorTab = 1; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("Entrada  (Input Selection)"), nullptr, app.ui.editorTab == 0 && ImGui::GetFrameCount() < 3 ? ImGuiTabItemFlags_SetSelected : 0)) { app.ui.editorTab = 0; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem(T("Saída  (Output Transformation)"), nullptr, app.ui.editorTab == 1 && ImGui::GetFrameCount() < 3 ? ImGuiTabItemFlags_SetSelected : 0)) { app.ui.editorTab = 1; ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
     int tab = app.ui.editorTab;
-    if (ImGui::Button("Ajustar")) app.ui.zoom[tab] = 0;
+    if (ImGui::Button(T("Ajustar"))) app.ui.zoom[tab] = 0;
     ImGui::SameLine();
     if (ImGui::Button("100%")) { app.ui.zoom[tab] = 1; app.ui.pan[tab][0] = app.ui.pan[tab][1] = 0; }
     ImGui::SameLine();
-    ImGui::Checkbox("Snap", &app.ui.snap);
+    ImGui::Checkbox(T("Snap"), &app.ui.snap);
     ImGui::SameLine();
-    ImGui::Checkbox("Grelha", &app.ui.showGrid);
+    ImGui::Checkbox(T("Grelha"), &app.ui.showGrid);
     if (app.ui.showGrid) { ImGui::SameLine(); ImGui::SetNextItemWidth(70); ImGui::InputInt("##grid", &app.ui.gridSize, 0); app.ui.gridSize = std::clamp(app.ui.gridSize, 2, 512); }
     if (sc) {
         ImGui::SameLine();
-        if (ImGui::Checkbox("Test pattern", &sc->testPattern)) app.markDirty();
+        if (ImGui::Checkbox(T("Test pattern"), &sc->testPattern)) app.markDirty();
         ImGui::SameLine();
-        ImGui::TextDisabled("  %s: %dx%d", tab == 0 ? "Composição" : sc->name.c_str(),
+        ImGui::TextDisabled(T("  %s: %dx%d"), tab == 0 ? T("Composição") : sc->name.c_str(),
                             tab == 0 ? app.project.comp.width : sc->width, tab == 0 ? app.project.comp.height : sc->height);
     }
     ImGui::SameLine();
     ImGui::TextDisabled("(?)");
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Arrastar: mover   ·   Pegas: redimensionar (Shift = proporção, Ctrl = a partir do centro)\n"
-                          "Círculo turquesa: rodar (Shift = 15°)   ·   Alt: desligar snap\n"
-                          "Setas: 1 px (Shift = 10 px)   ·   Del: apagar   ·   Ctrl+D: duplicar\n"
-                          "Roda do rato: zoom   ·   Botão do meio ou Espaço+arrastar: mover a vista");
+        ImGui::SetTooltip("%s\n%s\n%s\n%s",
+                          T("Arrastar: mover   ·   Pegas: redimensionar (Shift = proporção, Ctrl = a partir do centro)"),
+                          T("Círculo turquesa: rodar (Shift = 15°)   ·   Alt: desligar snap"),
+                          T("Setas: 1 px (Shift = 10 px)   ·   Del: apagar   ·   Ctrl+D: duplicar"),
+                          T("Roda do rato: zoom   ·   Botão do meio ou Espaço+arrastar: mover a vista"));
     if (sc) canvas(app, *sc);
-    else ImGui::TextDisabled("Adiciona um ecrã à esquerda.");
+    else ImGui::TextDisabled(T("Adiciona um ecrã à esquerda."));
     ImGui::EndChild();
     ImGui::SameLine();
 
@@ -709,7 +718,7 @@ void drawSliceEditor(App& app) {
         Slice* sl = nullptr;
         for (auto& s : sc->slices) if (s.id == app.ui.selSlice) sl = &s;
         if (sl) sliceProps(app, *sc, *sl);
-        else ImGui::TextDisabled("\nSeleciona uma slice para editar.");
+        else ImGui::TextDisabled(T("\nSeleciona uma slice para editar."));
         ImGui::PopItemWidth();
     }
     ImGui::EndChild();

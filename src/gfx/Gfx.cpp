@@ -155,13 +155,23 @@ bool Gfx::compileShaders(std::string* err) {
     return true;
 }
 
-bool Gfx::init(std::string* err) {
+bool Gfx::init(const std::string& preferredGpu, std::string* err) {
     HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&m_factory));
     if (FAILED(hr)) { if (err) *err = "CreateDXGIFactory2 falhou"; return false; }
 
-    // Escolher a gráfica com mais VRAM dedicada (a NVIDIA em vez da integrada)
+    // 1) placa escolhida nas Definições
+    if (!preferredGpu.empty()) {
+        ComPtr<IDXGIFactory1> f1; m_factory.As(&f1);
+        ComPtr<IDXGIAdapter1> a;
+        for (UINT i = 0; f1 && f1->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i) {
+            DXGI_ADAPTER_DESC1 d; a->GetDesc1(&d);
+            if (toUtf8(d.Description) == preferredGpu) { m_adapter = a; break; }
+        }
+        if (!m_adapter) PS_WARN("Placa '%s' não encontrada — a usar a mais potente", preferredGpu.c_str());
+    }
+    // 2) senão, a gráfica de alto desempenho (a NVIDIA em vez da integrada)
     ComPtr<IDXGIFactory6> f6;
-    if (SUCCEEDED(m_factory.As(&f6))) {
+    if (!m_adapter && SUCCEEDED(m_factory.As(&f6))) {
         f6->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&m_adapter));
     }
     if (!m_adapter) {

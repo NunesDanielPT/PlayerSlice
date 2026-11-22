@@ -1,6 +1,9 @@
 #include "app/App.h"
 #include "core/Log.h"
 #include "core/CrashHandler.h"
+#include "core/I18n.h"
+#include "core/Settings.h"
+#include "core/Updater.h"
 #include "ui/UI.h"
 #include "video/VideoPlayer.h"
 #include "video/Thumbnail.h"
@@ -50,6 +53,7 @@ static bool writeFileAtomic(const std::wstring& path, const std::string& data) {
 
 void App::newProject() {
     comp.stopAll(project);
+    liveScreens.clear();
     project = Project::makeDefault();
     projectPath.clear();
     dirty = false;
@@ -64,8 +68,10 @@ bool App::openProject(const std::wstring& path) {
     Project p;
     if (!p.fromJson(text, &err)) { PS_ERROR("Projeto inválido: %s", err.c_str()); return false; }
     comp.stopAll(project);
+    liveScreens.clear();
     project = std::move(p);
     projectPath = path;
+    if (settings().startOutputsLive) setAllOutputs(true);
     dirty = false;
     m_undo.clear(); m_redo.clear();
     ui.selScreen = project.screens.empty() ? 0 : project.screens[0].id;
@@ -91,7 +97,9 @@ void App::saveAsDialog() {
     wchar_t file[MAX_PATH] = L"projeto.psproj";
     OPENFILENAMEW of{sizeof(of)};
     of.hwndOwner = m_hwnd;
-    of.lpstrFilter = L"Projeto PLAYERSLICE (*.psproj)\0*.psproj\0";
+    std::wstring filter = fromUtf8(T("Projeto PLAYERSLICE")) + L" (*.psproj)";
+    filter.push_back(0); filter += L"*.psproj"; filter.push_back(0); filter.push_back(0);
+    of.lpstrFilter = filter.c_str();
     of.lpstrFile = file; of.nMaxFile = MAX_PATH;
     of.lpstrDefExt = L"psproj";
     of.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
@@ -102,7 +110,9 @@ void App::openDialog() {
     wchar_t file[MAX_PATH] = L"";
     OPENFILENAMEW of{sizeof(of)};
     of.hwndOwner = m_hwnd;
-    of.lpstrFilter = L"Projeto PLAYERSLICE (*.psproj)\0*.psproj\0";
+    std::wstring filter = fromUtf8(T("Projeto PLAYERSLICE")) + L" (*.psproj)";
+    filter.push_back(0); filter += L"*.psproj"; filter.push_back(0); filter.push_back(0);
+    of.lpstrFilter = filter.c_str();
     of.lpstrFile = file; of.nMaxFile = MAX_PATH;
     of.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
     if (GetOpenFileNameW(&of)) openProject(file);
@@ -112,7 +122,10 @@ std::vector<std::string> App::pickVideoFiles() {
     std::vector<wchar_t> buf(32768, 0);
     OPENFILENAMEW of{sizeof(of)};
     of.hwndOwner = m_hwnd;
-    of.lpstrFilter = L"Vídeo\0*.mov;*.mp4;*.mkv;*.avi;*.mxf;*.m4v;*.webm;*.ts\0Todos\0*.*\0";
+    std::wstring filter = fromUtf8(T("Vídeo"));
+    filter.push_back(0); filter += L"*.mov;*.mp4;*.mkv;*.avi;*.mxf;*.m4v;*.webm;*.ts"; filter.push_back(0);
+    filter += fromUtf8(T("Todos")); filter.push_back(0); filter += L"*.*"; filter.push_back(0); filter.push_back(0);
+    of.lpstrFilter = filter.c_str();
     of.lpstrFile = buf.data(); of.nMaxFile = (DWORD)buf.size();
     of.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_NOCHANGEDIR;
     std::vector<std::string> out;
@@ -128,6 +141,56 @@ void App::refreshDisplays() {
     displays = enumerateDisplays();
     PS_INFO("%d saídas de vídeo detetadas", (int)displays.size());
     for (auto& d : displays) PS_INFO("  %s — %s", d.label().c_str(), d.adapter.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// saídas ligadas / desligadas
+// ---------------------------------------------------------------------------
+void App::setOutput(uint32_t id, bool on) {
+    if (on) liveScreens.insert(id); else liveScreens.erase(id);
+}
+
+void App::setAllOutputs(bool on) {
+    liveScreens.clear();
+    if (on) for (auto& s : project.screens) if (s.device != ScreenDevice::Disabled) liveScreens.insert(s.id);
+    PS_INFO("%s", on ? "Saídas ligadas (todas)" : "Saídas desligadas (todas)");
+}
+
+void App::toggleOutputs() {
+    std::vector<uint32_t> targets;
+    for (auto& s : project.screens) if (s.device != ScreenDevice::Disabled && s.inToggle) targets.push_back(s.id);
+    if (targets.empty()) for (auto& s : project.screens) if (s.device != ScreenDevice::Disabled) targets.push_back(s.id);
+    if (targets.empty()) { PS_WARN("Nenhum ecrã tem saída configurada"); return; }
+    bool anyOn = false;
+    for (auto id : targets) if (isLive(id)) anyOn = true;
+    for (auto id : targets) setOutput(id, !anyOn);
+    PS_INFO("Saídas %s (%d)", anyOn ? "desligadas" : "ligadas", (int)targets.size());
+}
+
+void App::runAction(int a) {
+    switch ((Action)a) {
+    case Action::ToggleOutputs: toggleOutputs(); break;
+    case Action::OutputsOn:     setAllOutputs(true); break;
+    case Action::OutputsOff:    setAllOutputs(false); break;
+    case Action::StopAll:       comp.stopAll(project); break;
+    case Action::TestPattern:
+        if (Screen* s = project.findScreen(ui.selScreen)) { s->testPattern = !s->testPattern; dirty = true; }
+        break;
+    case Action::Save:          saveOrSaveAs(); break;
+    case Action::SaveAs:        saveAsDialog(); break;
+    case Action::Open:          openDialog(); break;
+    case Action::Undo:          undo(); break;
+    case Action::Redo:          redo(); break;
+    case Action::Settings:      ui.showSettings = true; break;
+    case Action::OutputEditor:  ui.focusEditor = true; break;
+    default:
+        if (a >= (int)Action::Column1 && a <= (int)Action::Column9) comp.triggerColumn(project, a - (int)Action::Column1);
+        break;
+    }
+}
+
+void App::applyLanguage() {
+    setLanguage(langFromCode(settings().language));
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +269,7 @@ LRESULT App::handleMessage(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_CLOSE:
         if (dirty) {
-            int r = MessageBoxW(h, L"Gravar alterações ao projeto antes de sair?", L"PLAYERSLICE", MB_YESNOCANCEL | MB_ICONQUESTION);
+            int r = MessageBoxW(h, fromUtf8(T("Gravar alterações ao projeto antes de sair?")).c_str(), L"PLAYERSLICE", MB_YESNOCANCEL | MB_ICONQUESTION);
             if (r == IDCANCEL) return 0;
             if (r == IDYES) { saveOrSaveAs(); if (dirty) return 0; }
         }
@@ -282,7 +345,13 @@ void App::frame() {
     ThumbnailCache::get().poll();
     comp.update(project, now);
     comp.render(project);
-    outputs.sync(project, displays, m_hwnd);
+    // limpar ids de ecrãs apagados ou sem dispositivo
+    for (auto it = liveScreens.begin(); it != liveScreens.end();) {
+        const Screen* s = project.findScreen(*it);
+        it = (!s || s->device == ScreenDevice::Disabled) ? liveScreens.erase(it) : std::next(it);
+    }
+    auto live = [this](uint32_t id) { return isLive(id); };
+    outputs.sync(project, displays, live, settings().outputsOffBlack);
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -297,7 +366,7 @@ void App::frame() {
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     bool vsynced = false;
-    outputs.present(project, comp, vsynced);
+    outputs.present(comp, live, vsynced);
     m_swap->Present(vsynced ? 0 : 1, 0);
 
     autosave(now);
@@ -320,14 +389,17 @@ int App::run(HINSTANCE inst) {
     SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &pt, sizeof(pt));
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED); // não desligar ecrãs
 
+    settings().load();
+    applyLanguage();
+
     std::string err;
-    if (!gfx().init(&err)) {
-        MessageBoxW(nullptr, fromUtf8("Erro gráfico: " + err).c_str(), L"PLAYERSLICE", MB_ICONERROR);
+    if (!gfx().init(settings().gpu, &err)) {
+        MessageBoxW(nullptr, fromUtf8(std::string(T("Erro gráfico: ")) + err).c_str(), L"PLAYERSLICE", MB_ICONERROR);
         return 1;
     }
     VideoSystem::init();
     if (!initWindow(inst) || !initSwapchain()) {
-        MessageBoxW(nullptr, L"Não foi possível criar a janela principal", L"PLAYERSLICE", MB_ICONERROR);
+        MessageBoxW(nullptr, fromUtf8(T("Não foi possível criar a janela principal")).c_str(), L"PLAYERSLICE", MB_ICONERROR);
         return 1;
     }
 
@@ -347,7 +419,7 @@ int App::run(HINSTANCE inst) {
     // recuperar trabalho depois de um crash
     std::wstring rec = dir + L"\\crash_recovery.psproj";
     if (GetFileAttributesW(rec.c_str()) != INVALID_FILE_ATTRIBUTES) {
-        if (MessageBoxW(m_hwnd, L"O PLAYERSLICE fechou inesperadamente.\nRecuperar o projeto?", L"PLAYERSLICE",
+        if (MessageBoxW(m_hwnd, fromUtf8(T("O PLAYERSLICE fechou inesperadamente.\nRecuperar o projeto?")).c_str(), L"PLAYERSLICE",
                         MB_YESNO | MB_ICONWARNING) == IDYES) {
             openProject(rec);
             projectPath.clear();
@@ -361,6 +433,8 @@ int App::run(HINSTANCE inst) {
         if (argv && argc > 1) openProject(argv[1]);
         if (argv) LocalFree(argv);
     }
+
+    if (settings().checkUpdates) Updater::get().check(false);
 
     while (m_running) {
         MSG msg;

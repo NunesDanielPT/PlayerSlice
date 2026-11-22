@@ -61,7 +61,8 @@ struct QuadParams {
 
 class Gfx {
 public:
-    bool init(std::string* err);
+    // preferredGpu: descrição da placa (vazio = a mais potente)
+    bool init(const std::string& preferredGpu, std::string* err);
     void shutdown();
 
     ID3D11Device*        dev() const { return m_dev.Get(); }

@@ -90,6 +90,7 @@ struct Screen {
     int         height = 1080;
     float       brightness = 0.0f;
     bool        testPattern = false;
+    bool        inToggle = true;    // incluído no atalho ligar/desligar saídas
     std::vector<Slice> slices;
 };
 

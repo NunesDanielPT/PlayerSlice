@@ -51,6 +51,46 @@ os vídeos do Explorador para essa layer.
 O fundo do editor mostra o vídeo real (composição na Entrada, saída na Saída) e o
 **Test pattern** desenha xadrez, círculo e diagonais em cada slice, na cor da slice.
 
+## Saídas: ligar e desligar
+
+* Cada ecrã tem a opção **"No atalho"**. **F12** liga/desliga os ecrãs marcados
+  (se nenhum estiver marcado, todos). **Ctrl+F12** liga todas, **Shift+F12** desliga todas.
+* Botão **SAÍDAS LIGADAS / DESLIGADAS** na barra de estado e no Monitor de saídas.
+* Nas Definições escolhes o que acontece ao desligar: **preto** (recomendado em
+  espetáculo) ou **fechar a janela**.
+
+## Definições
+
+Idioma (Português / English) · Placa gráfica · Placa de rede · Placa de som ·
+Atalhos de teclado (todos editáveis) · Atualizações · Sobre.
+
+| Atalho (predefinido) | Ação |
+|---|---|
+| F12 / Ctrl+F12 / Shift+F12 | Ligar-desligar saídas marcadas / ligar todas / desligar todas |
+| F1 … F9 | Disparar coluna 1 … 9 |
+| Shift+Esc | Parar todos os clips |
+| Ctrl+T | Test pattern do ecrã selecionado |
+| Ctrl+E | Editor de saídas e slices |
+| Ctrl+S / Ctrl+Shift+S / Ctrl+O | Gravar / Gravar como / Abrir |
+| Ctrl+Z / Ctrl+Y | Desfazer / Refazer |
+| Ctrl+, | Definições |
+
+## Atualizações
+
+Ao abrir, a app consulta a última *release* deste repositório no GitHub. Se houver
+uma versão nova aparece um aviso (nunca com saídas no ar); também há o botão
+**Procurar atualizações** nas Definições. O instalador novo é descarregado,
+instalado em silêncio e a app volta a abrir.
+
+Para lançar uma versão: subir `VERSION` no `CMakeLists.txt`, fazer push, e criar
+a release com a tag `vX.Y.Z` (o GitHub Actions anexa o instalador).
+
+## Idiomas
+
+A interface está em **Português** e **English** (escolha no instalador e nas
+Definições). As traduções vivem em `scripts/i18n_en.py`; o build falha se alguma
+frase nova não tiver tradução inglesa.
+
 ## Motor
 
 * **C++20 + Direct3D 11**, uma thread de descodificação por clip, filas de frames,

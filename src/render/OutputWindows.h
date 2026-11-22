@@ -2,6 +2,7 @@
 #include "core/Model.h"
 #include "gfx/Gfx.h"
 #include "gfx/Displays.h"
+#include <functional>
 #include <map>
 #include <vector>
 
@@ -13,8 +14,10 @@ class Compositor;
 // saída inteira da gráfica (sem bordas, por cima de tudo, sem cursor).
 class OutputWindows {
 public:
-    void sync(const Project& p, const std::vector<DisplayInfo>& displays, HWND mainWnd);
-    void present(const Project& p, const Compositor& comp, bool& didVsync);
+    using LiveFn = std::function<bool(uint32_t screenId)>;
+    // offBlack: saídas desligadas mantêm a janela a preto (em vez de fechar)
+    void sync(const Project& p, const std::vector<DisplayInfo>& displays, const LiveFn& live, bool offBlack);
+    void present(const Compositor& comp, const LiveFn& live, bool& didVsync);
     void closeAll();
     int  count() const { return (int)m_wins.size(); }
     bool coversMonitor(HMONITOR m) const;

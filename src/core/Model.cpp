@@ -132,7 +132,7 @@ std::string Project::toJson() const {
         json sj;
         sj["id"] = s.id; sj["name"] = s.name; sj["device"] = (int)s.device;
         sj["monitor"] = s.monitorKey; sj["width"] = s.width; sj["height"] = s.height;
-        sj["brightness"] = s.brightness; sj["testPattern"] = s.testPattern;
+        sj["brightness"] = s.brightness; sj["testPattern"] = s.testPattern; sj["inToggle"] = s.inToggle;
         sj["slices"] = json::array();
         for (auto& sl : s.slices) {
             json k;
@@ -188,7 +188,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             get(sj, "id", s.id); get(sj, "name", s.name);
             int d = 0; get(sj, "device", d); s.device = (ScreenDevice)d;
             get(sj, "monitor", s.monitorKey); get(sj, "width", s.width); get(sj, "height", s.height);
-            get(sj, "brightness", s.brightness); get(sj, "testPattern", s.testPattern);
+            get(sj, "brightness", s.brightness); get(sj, "testPattern", s.testPattern); get(sj, "inToggle", s.inToggle);
             for (auto& k : sj.value("slices", json::array())) {
                 Slice sl;
                 get(k, "id", sl.id); get(k, "name", sl.name); get(k, "enabled", sl.enabled);

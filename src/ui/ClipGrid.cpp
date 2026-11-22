@@ -1,4 +1,5 @@
 #include "ui/UI.h"
+#include "core/I18n.h"
 #include "app/App.h"
 #include "video/Thumbnail.h"
 #include <imgui.h>
@@ -56,17 +57,17 @@ static void layerHeader(App& app, int li, float rowH) {
     ImGui::SetCursorScreenPos(ImVec2(p0.x + 6, p0.y + 26));
     float bs = 22;
     if (ImGui::Button("X", ImVec2(bs, bs))) app.comp.stopLayer(p, li);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Parar layer");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Parar layer"));
     ImGui::SameLine(0, 3);
     ImGui::PushStyleColor(ImGuiCol_Button, l.bypass ? ImVec4(0.75f, 0.3f, 0.3f, 1) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
     if (ImGui::Button("B", ImVec2(bs, bs))) { app.checkpoint(); l.bypass = !l.bypass; }
     ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Bypass (esconder)");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Bypass (esconder)"));
     ImGui::SameLine(0, 3);
     ImGui::PushStyleColor(ImGuiCol_Button, l.solo ? ImVec4(0.85f, 0.7f, 0.2f, 1) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
     if (ImGui::Button("S", ImVec2(bs, bs))) { app.checkpoint(); l.solo = !l.solo; }
     ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Solo"));
     ImGui::SameLine(0, 6);
     ImGui::SetNextItemWidth(std::max(40.f, w - (bs + 3) * 3 - 18));
     ImGui::SliderFloat("##op", &l.opacity, 0, 1, "%.2f");
@@ -74,31 +75,31 @@ static void layerHeader(App& app, int li, float rowH) {
 
     ImGui::SetCursorScreenPos(ImVec2(p0.x + 8, p0.y + 54));
     const char* blends[] = {"Normal", "Add", "Multiply", "Screen"};
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.62f, 1), "%s  ·  fade %.1fs", blends[(int)l.blend], l.fadeTime);
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.62f, 1), T("%s  ·  fade %.1fs"), blends[(int)l.blend], l.fadeTime);
 
     // menu de contexto
     ImGui::SetCursorScreenPos(p0);
     ImGui::InvisibleButton("##ctx", ImVec2(w, rowH - 2), ImGuiButtonFlags_MouseButtonRight);
     if (ImGui::BeginPopupContextItem("layerctx")) {
         app.ui.selLayer = li;
-        if (ImGui::MenuItem("Adicionar layer acima")) {
+        if (ImGui::MenuItem(T("Adicionar layer acima"))) {
             app.checkpoint();
             Layer nl; nl.id = p.newId(); nl.name = "Layer " + std::to_string(p.comp.layers.size() + 1);
             nl.region = {0, 0, (float)p.comp.width, (float)p.comp.height};
             nl.clips.resize(p.comp.columns.size());
             p.comp.layers.insert(p.comp.layers.begin() + li, nl);
         }
-        if (ImGui::MenuItem("Duplicar layer")) {
+        if (ImGui::MenuItem(T("Duplicar layer"))) {
             app.checkpoint();
-            Layer copy = l; copy.id = p.newId(); copy.name += " (cópia)"; copy.activeColumn = -1;
+            Layer copy = l; copy.id = p.newId(); copy.name += T(" (cópia)"); copy.activeColumn = -1;
             for (auto& c : copy.clips) if (!c.empty()) c.id = p.newId();
             p.comp.layers.insert(p.comp.layers.begin() + li, copy);
         }
-        if (ImGui::MenuItem("Mover para cima", nullptr, false, li > 0)) { app.checkpoint(); std::swap(p.comp.layers[li], p.comp.layers[li - 1]); }
-        if (ImGui::MenuItem("Mover para baixo", nullptr, false, li + 1 < (int)p.comp.layers.size())) { app.checkpoint(); std::swap(p.comp.layers[li], p.comp.layers[li + 1]); }
+        if (ImGui::MenuItem(T("Mover para cima"), nullptr, false, li > 0)) { app.checkpoint(); std::swap(p.comp.layers[li], p.comp.layers[li - 1]); }
+        if (ImGui::MenuItem(T("Mover para baixo"), nullptr, false, li + 1 < (int)p.comp.layers.size())) { app.checkpoint(); std::swap(p.comp.layers[li], p.comp.layers[li + 1]); }
         ImGui::Separator();
-        if (ImGui::MenuItem("Esvaziar clips")) { app.checkpoint(); app.comp.stopLayer(p, li); for (auto& c : p.comp.layers[li].clips) c = Clip{}; }
-        if (ImGui::MenuItem("Apagar layer", nullptr, false, p.comp.layers.size() > 1)) {
+        if (ImGui::MenuItem(T("Esvaziar clips"))) { app.checkpoint(); app.comp.stopLayer(p, li); for (auto& c : p.comp.layers[li].clips) c = Clip{}; }
+        if (ImGui::MenuItem(T("Apagar layer"), nullptr, false, p.comp.layers.size() > 1)) {
             app.checkpoint();
             app.comp.stopLayer(p, li);
             // slices que usavam esta layer como fonte passam para a composição
@@ -148,7 +149,7 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
             ImVec2 i0(p0.x + 2 + (aw - iw) * 0.5f, p0.y + 2 + (ah - ih) * 0.5f);
             dl->AddImage(texId(th->srv.Get()), i0, ImVec2(i0.x + iw, i0.y + ih));
         } else if (th->state == ThumbnailCache::Entry::State::Failed) {
-            dl->AddText(ImVec2(p0.x + 6, p0.y + 6), col::Error, "ficheiro inválido");
+            dl->AddText(ImVec2(p0.x + 6, p0.y + 6), col::Error, T("ficheiro inválido"));
         }
         // nome
         dl->AddRectFilled(ImVec2(p0.x, p1.y - 20), p1, IM_COL32(0, 0, 0, 170), 3);
@@ -164,7 +165,7 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
                     dl->AddRectFilled(ImVec2(p0.x, p1.y - 3), ImVec2(p0.x + (float)(cellW * pos), p1.y), col::Playing);
                 }
                 if (v->state() == VideoPlayer::State::Error)
-                    dl->AddText(ImVec2(p0.x + 6, p0.y + 6), col::Error, "ERRO");
+                    dl->AddText(ImVec2(p0.x + 6, p0.y + 6), col::Error, T("ERRO"));
             }
         }
     } else {
@@ -195,12 +196,12 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
 
     if (ImGui::BeginPopupContextItem("cellctx")) {
         app.ui.selLayer = li; app.ui.selColumn = ci;
-        if (ImGui::MenuItem("Escolher vídeo(s)...")) {
+        if (ImGui::MenuItem(T("Escolher vídeo(s)..."))) {
             auto files = app.pickVideoFiles();
             if (!files.empty()) { app.checkpoint(); for (size_t i = 0; i < files.size(); ++i) assignClip(app, li, ci + (int)i, files[i]); }
         }
-        if (ImGui::MenuItem("Tocar", nullptr, false, !c.empty())) app.comp.trigger(p, li, ci);
-        if (ImGui::MenuItem("Remover clip", nullptr, false, !c.empty())) {
+        if (ImGui::MenuItem(T("Tocar"), nullptr, false, !c.empty())) app.comp.trigger(p, li, ci);
+        if (ImGui::MenuItem(T("Remover clip"), nullptr, false, !c.empty())) {
             app.checkpoint();
             if (l.activeColumn == ci) app.comp.stopLayer(p, li);
             c = Clip{};
@@ -214,18 +215,18 @@ void drawClipGrid(App& app) {
     Project& p = app.project;
     app.ui.cells.clear();
 
-    if (!ImGui::Begin("Clips")) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Clips", "clips").c_str())) { ImGui::End(); return; }
 
     // barra de ferramentas
-    if (ImGui::Button("+ Layer")) {
+    if (ImGui::Button(T("+ Layer"))) {
         app.checkpoint();
         p.addLayer("Layer " + std::to_string(p.comp.layers.size() + 1));
         app.ui.selLayer = 0;
     }
     ImGui::SameLine();
-    if (ImGui::Button("+ Coluna")) { app.checkpoint(); p.ensureColumns((int)p.comp.columns.size() + 1); }
+    if (ImGui::Button(T("+ Coluna"))) { app.checkpoint(); p.ensureColumns((int)p.comp.columns.size() + 1); }
     ImGui::SameLine();
-    if (ImGui::Button("Abrir vídeos...")) {
+    if (ImGui::Button(T("Abrir vídeos..."))) {
         auto files = app.pickVideoFiles();
         if (!files.empty()) {
             app.checkpoint();
@@ -236,10 +237,10 @@ void drawClipGrid(App& app) {
     }
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.2f, 0.2f, 1));
-    if (ImGui::Button("Parar tudo")) app.comp.stopAll(p);
+    if (ImGui::Button(T("Parar tudo"))) app.comp.stopAll(p);
     ImGui::PopStyleColor();
     ImGui::SameLine();
-    ImGui::TextDisabled("  Arrasta vídeos do Explorador para as células · Ctrl+arrastar copia");
+    ImGui::TextDisabled(T("  Arrasta vídeos do Explorador para as células · Ctrl+arrastar copia"));
 
     const float headerW = 210, cellW = 132, cellH = 84;
     const int ncols = (int)p.comp.columns.size();
@@ -253,7 +254,7 @@ void drawClipGrid(App& app) {
         // cabeçalho: colunas clicáveis (dispara a coluna inteira)
         ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextDisabled("Composição %dx%d", p.comp.width, p.comp.height);
+        ImGui::TextDisabled(T("Composição %dx%d"), p.comp.width, p.comp.height);
         for (int c = 0; c < ncols; ++c) {
             ImGui::TableSetColumnIndex(c + 1);
             ImGui::PushID(c);
@@ -264,9 +265,9 @@ void drawClipGrid(App& app) {
             if (anyActive) ImGui::PopStyleColor();
             if (ImGui::BeginPopupContextItem("colctx")) {
                 ImGui::SetNextItemWidth(160);
-                inputTextStd("Nome", p.comp.columns[c]);
+                inputTextStd(T("Nome"), p.comp.columns[c]);
                 undoOnActivate(app);
-                if (ImGui::MenuItem("Apagar coluna", nullptr, false, ncols > 1)) {
+                if (ImGui::MenuItem(T("Apagar coluna"), nullptr, false, ncols > 1)) {
                     app.checkpoint();
                     for (int li = 0; li < (int)p.comp.layers.size(); ++li) {
                         auto& l = p.comp.layers[li];

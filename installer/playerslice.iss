@@ -1,6 +1,8 @@
 ; Instalador do PLAYERSLICE (Inno Setup 6)
 #define AppName "PLAYERSLICE"
-#define AppVersion "0.1.0"
+#ifndef AppVersion
+  #define AppVersion "0.1.0"
+#endif
 
 [Setup]
 AppId={{6B0C4C2E-5A51-4F0B-9E0C-2C7D9A1F5E11}
@@ -20,6 +22,14 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ChangesAssociations=yes
 WizardStyle=modern
+WizardImageFile=wizard.bmp,wizard-2x.bmp
+WizardSmallImageFile=small.bmp,small-2x.bmp
+; perguntar sempre o idioma (Português / English)
+ShowLanguageDialog=yes
+UsePreviousLanguage=no
+; fechar a app ao atualizar e voltar a abri-la
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
@@ -41,5 +51,11 @@ Root: HKA; Subkey: "Software\Classes\PLAYERSLICE.Project"; ValueType: string; Va
 Root: HKA; Subkey: "Software\Classes\PLAYERSLICE.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\PLAYERSLICE.exe,0"
 Root: HKA; Subkey: "Software\Classes\PLAYERSLICE.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\PLAYERSLICE.exe"" ""%1"""
 
+[INI]
+; idioma escolhido no instalador → idioma inicial da app
+Filename: "{app}\playerslice.ini"; Section: "General"; Key: "Language"; String: "{language}"
+
 [Run]
 Filename: "{app}\PLAYERSLICE.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; atualização automática (modo silencioso): voltar a abrir a app
+Filename: "{app}\PLAYERSLICE.exe"; Flags: nowait; Check: WizardSilent

@@ -1,6 +1,8 @@
 #include "ui/UI.h"
 #include "app/App.h"
+#include "core/I18n.h"
 #include "core/Log.h"
+#include "core/Settings.h"
 #include "video/Thumbnail.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -9,6 +11,8 @@
 #include <shellapi.h>
 
 namespace ps {
+
+std::string winTitle(const char* pt, const char* id) { return std::string(T(pt)) + "###" + id; }
 
 static void buildDefaultLayout(ImGuiID dock) {
     ImGui::DockBuilderRemoveNode(dock);
@@ -19,12 +23,12 @@ static void buildDefaultLayout(ImGuiID dock) {
     ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.34f, &bottomLeft, &left);
     ImGuiID bl1, bl2;
     ImGui::DockBuilderSplitNode(bottomLeft, ImGuiDir_Left, 0.5f, &bl1, &bl2);
-    ImGui::DockBuilderDockWindow("Clips", left);
-    ImGui::DockBuilderDockWindow("Saídas e Slices", left);
-    ImGui::DockBuilderDockWindow("Composição", bl1);
-    ImGui::DockBuilderDockWindow("Monitor de saídas", bl2);
-    ImGui::DockBuilderDockWindow("Registo", bl2);
-    ImGui::DockBuilderDockWindow("Propriedades", right);
+    ImGui::DockBuilderDockWindow("###clips", left);
+    ImGui::DockBuilderDockWindow("###slices", left);
+    ImGui::DockBuilderDockWindow("###comp", bl1);
+    ImGui::DockBuilderDockWindow("###monitor", bl2);
+    ImGui::DockBuilderDockWindow("###log", bl2);
+    ImGui::DockBuilderDockWindow("###props", right);
     ImGui::DockBuilderFinish(dock);
 }
 
@@ -40,41 +44,69 @@ static void fitImage(ImTextureID tex, float tw, float th, ImVec2 avail) {
 }
 
 static void compositionWindow(App& app) {
-    if (!ImGui::Begin("Composição")) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Composição", "comp").c_str())) { ImGui::End(); return; }
     const RenderTarget& rt = app.comp.compRT();
     ImGui::TextDisabled("%dx%d", app.project.comp.width, app.project.comp.height);
     ImGui::SameLine();
-    if (ImGui::SmallButton("Definições...")) app.ui.showCompSettings = true;
+    if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
     if (rt.valid()) fitImage(texId(rt.srv.Get()), (float)rt.w, (float)rt.h, ImGui::GetContentRegionAvail());
     ImGui::End();
 }
 
+// botão grande ligar/desligar (usado na barra de estado e no monitor)
+static void outputsButton(App& app, ImVec2 size) {
+    bool on = app.anyLive();
+    ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.75f, 0.15f, 0.15f, 1) : ImVec4(0.22f, 0.24f, 0.27f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.85f, 0.2f, 0.2f, 1) : ImVec4(0.3f, 0.33f, 0.37f, 1));
+    std::string lbl = std::string(on ? T("SAÍDAS LIGADAS") : T("SAÍDAS DESLIGADAS")) + "  (" +
+                      bindingLabel(settings().keys[(int)Action::ToggleOutputs]) + ")##outbtn";
+    if (ImGui::Button(lbl.c_str(), size)) app.toggleOutputs();
+    ImGui::PopStyleColor(2);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Liga/desliga os ecrãs marcados \"no atalho\" (se nenhum estiver marcado, todos)."));
+}
+
 static void outputsMonitor(App& app) {
-    if (!ImGui::Begin("Monitor de saídas")) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Monitor de saídas", "monitor").c_str())) { ImGui::End(); return; }
     Project& p = app.project;
-    if (p.screens.empty()) ImGui::TextDisabled("Sem ecrãs. Cria um em \"Saídas e Slices\".");
+    outputsButton(app, ImVec2(260, 0));
+    ImGui::SameLine();
+    if (ImGui::Button(T("Ligar todas"))) app.setAllOutputs(true);
+    ImGui::SameLine();
+    if (ImGui::Button(T("Desligar todas"))) app.setAllOutputs(false);
+    ImGui::Separator();
+    if (p.screens.empty()) ImGui::TextDisabled("%s", T("Sem ecrãs. Cria um em \"Saídas e Slices\"."));
     float availW = ImGui::GetContentRegionAvail().x;
     int n = std::max(1, (int)p.screens.size());
-    int cols = std::clamp((int)(availW / 220), 1, n);
+    int cols = std::clamp((int)(availW / 230), 1, n);
     float w = (availW - (cols - 1) * 8) / cols;
     for (int i = 0; i < (int)p.screens.size(); ++i) {
         Screen& s = p.screens[i];
         if (i % cols) ImGui::SameLine(0, 8);
         ImGui::BeginGroup();
         ImGui::PushID((int)s.id);
-        bool live = s.device != ScreenDevice::Disabled;
+        bool configured = s.device != ScreenDevice::Disabled;
         bool missing = s.device == ScreenDevice::Monitor &&
                        std::none_of(app.displays.begin(), app.displays.end(), [&](const DisplayInfo& d) { return d.key == s.monitorKey; });
-        ImVec4 dot = missing ? ImVec4(1, 0.3f, 0.3f, 1) : live ? ImVec4(0.35f, 0.9f, 0.45f, 1) : ImVec4(0.5f, 0.5f, 0.5f, 1);
+        bool live = app.isLive(s.id);
+        ImVec4 dot = missing ? ImVec4(1, 0.3f, 0.3f, 1) : live ? ImVec4(1, 0.25f, 0.25f, 1) : configured ? ImVec4(0.35f, 0.9f, 0.45f, 1) : ImVec4(0.5f, 0.5f, 0.5f, 1);
         ImGui::TextColored(dot, "●");
         ImGui::SameLine();
-        ImGui::Text("%s  %dx%d%s", s.name.c_str(), s.width, s.height, missing ? "  SEM SINAL" : "");
+        ImGui::Text("%s  %dx%d", s.name.c_str(), s.width, s.height);
+        if (missing) { ImGui::SameLine(); ImGui::TextColored(ImVec4(1, 0.35f, 0.35f, 1), "%s", T("SEM SINAL")); }
+        else if (live) { ImGui::SameLine(); ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "%s", T("NO AR")); }
         float h = w * s.height / std::max(1, s.width);
         if (const RenderTarget* rt = app.comp.screenRT(s.id)) {
             if (ImGui::ImageButton("##scr", texId(rt->srv.Get()), ImVec2(w - 8, h))) {
                 app.ui.selScreen = s.id; app.ui.selSlice = 0; app.ui.focusEditor = true;
             }
         }
+        if (configured) {
+            bool on = live;
+            if (ImGui::Checkbox(T("Ligada"), &on)) app.setOutput(s.id, on);
+            ImGui::SameLine();
+        }
+        if (ImGui::Checkbox(T("No atalho"), &s.inToggle)) app.markDirty();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Este ecrã liga/desliga com o atalho das saídas."));
         ImGui::PopID();
         ImGui::EndGroup();
     }
@@ -82,18 +114,18 @@ static void outputsMonitor(App& app) {
 }
 
 static void propertiesWindow(App& app) {
-    if (!ImGui::Begin("Propriedades")) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Propriedades", "props").c_str())) { ImGui::End(); return; }
     Project& p = app.project;
     int li = app.ui.selLayer;
-    if (li < 0 || li >= (int)p.comp.layers.size()) { ImGui::TextDisabled("Seleciona uma layer."); ImGui::End(); return; }
+    if (li < 0 || li >= (int)p.comp.layers.size()) { ImGui::TextDisabled("%s", T("Seleciona uma layer.")); ImGui::End(); return; }
     Layer& l = p.comp.layers[li];
-    ImGui::PushItemWidth(-100);
+    ImGui::PushItemWidth(-110);
 
     int ci = app.ui.selColumn;
     if (ci >= 0 && ci < (int)l.clips.size() && !l.clips[ci].empty()) {
         Clip& c = l.clips[ci];
-        ImGui::SeparatorText("Clip");
-        inputTextStd("Nome##clip", c.name);
+        ImGui::SeparatorText(T("Clip"));
+        inputTextStd(T("Nome##clip"), c.name);
         undoOnActivate(app);
         ImGui::TextWrapped("%s", c.path.c_str());
         auto th = ThumbnailCache::get().request(c.path);
@@ -101,51 +133,50 @@ static void propertiesWindow(App& app) {
             const MediaInfo& mi = th->info;
             ImGui::TextColored(ImVec4(0.6f, 0.85f, 0.8f, 1), "%dx%d  ·  %.2f fps  ·  %.1f s  ·  %s", mi.width, mi.height, mi.fps, mi.duration, mi.codec.c_str());
             if (l.useRegion && (std::abs(l.region.w - mi.width) > 0.5f || std::abs(l.region.h - mi.height) > 0.5f))
-                ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), "Atenção: o vídeo não tem o tamanho da região (%.0fx%.0f)", l.region.w, l.region.h);
-            std::string codec = mi.codec;
-            if (codec != "hap" && (mi.width * mi.height >= 3840 * 2160 || mi.width >= 7680))
-                ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), "Dica: para vídeos muito grandes usa HAP / HAP Q.");
+                ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), T("Atenção: o vídeo não tem o tamanho da região (%.0fx%.0f)"), l.region.w, l.region.h);
+            if (mi.codec != "hap" && (mi.width * mi.height >= 3840 * 2160 || mi.width >= 7680))
+                ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), "%s", T("Dica: para vídeos muito grandes usa HAP / HAP Q."));
         }
         if (VideoPlayer* v = app.comp.activePlayer(l.id); v && l.activeColumn == ci) {
             MediaInfo mi = v->info();
-            ImGui::TextDisabled("A tocar: %s  ·  fila %d  ·  descartados %d", mi.codec.c_str(), v->queued(), v->dropped());
+            ImGui::TextDisabled(T("A tocar: %s  ·  fila %d  ·  descartados %d"), mi.codec.c_str(), v->queued(), v->dropped());
             if (v->state() == VideoPlayer::State::Error) ImGui::TextColored(ImVec4(1, 0.35f, 0.35f, 1), "%s", v->error().c_str());
         }
-        const char* loops[] = {"Loop", "Tocar uma vez e parar no fim", "Tocar uma vez e limpar"};
+        const char* loops[] = {T("Loop"), T("Tocar uma vez e parar no fim"), T("Tocar uma vez e limpar")};
         int lm = (int)c.loop;
-        if (ImGui::Combo("Repetição", &lm, loops, 3)) { app.checkpoint(); c.loop = (LoopMode)lm; }
-        ImGui::SliderFloat("Velocidade", &c.speed, 0.f, 4.f, "%.2fx");
+        if (ImGui::Combo(T("Repetição"), &lm, loops, 3)) { app.checkpoint(); c.loop = (LoopMode)lm; }
+        ImGui::SliderFloat(T("Velocidade"), &c.speed, 0.f, 4.f, "%.2fx");
         undoOnActivate(app);
-        ImGui::SliderFloat("Opacidade##clip", &c.opacity, 0, 1, "%.2f");
+        ImGui::SliderFloat(T("Opacidade##clip"), &c.opacity, 0, 1, "%.2f");
         undoOnActivate(app);
-        const char* fits[] = {"Esticar", "Caber (com barras)", "Preencher (cortar)", "Tamanho nativo"};
+        const char* fits[] = {T("Esticar"), T("Caber (com barras)"), T("Preencher (cortar)"), T("Tamanho nativo")};
         int fm = (int)c.fit;
-        if (ImGui::Combo("Encaixe", &fm, fits, 4)) { app.checkpoint(); c.fit = (FitMode)fm; }
-        ImGui::DragFloat("Escala", &c.scale, 0.005f, 0.01f, 20.f, "%.3f");
+        if (ImGui::Combo(T("Encaixe"), &fm, fits, 4)) { app.checkpoint(); c.fit = (FitMode)fm; }
+        ImGui::DragFloat(T("Escala"), &c.scale, 0.005f, 0.01f, 20.f, "%.3f");
         undoOnActivate(app);
         float off[2] = {c.offsetX, c.offsetY};
-        if (ImGui::DragFloat2("Deslocar", off, 1, -16384, 16384, "%.0f")) { c.offsetX = off[0]; c.offsetY = off[1]; }
+        if (ImGui::DragFloat2(T("Deslocar"), off, 1, -16384, 16384, "%.0f")) { c.offsetX = off[0]; c.offsetY = off[1]; }
         undoOnActivate(app);
-        if (ImGui::Button("Repor transformação")) { app.checkpoint(); c.scale = 1; c.offsetX = c.offsetY = 0; }
+        if (ImGui::Button(T("Repor transformação"))) { app.checkpoint(); c.scale = 1; c.offsetX = c.offsetY = 0; }
     }
 
-    ImGui::SeparatorText("Layer");
-    inputTextStd("Nome##layer", l.name);
+    ImGui::SeparatorText(T("Layer"));
+    inputTextStd(T("Nome##layer"), l.name);
     undoOnActivate(app);
-    ImGui::SliderFloat("Opacidade##layer", &l.opacity, 0, 1, "%.2f");
+    ImGui::SliderFloat(T("Opacidade##layer"), &l.opacity, 0, 1, "%.2f");
     undoOnActivate(app);
     const char* blends[] = {"Normal", "Add", "Multiply", "Screen"};
     int bm = (int)l.blend;
-    if (ImGui::Combo("Mistura", &bm, blends, 4)) { app.checkpoint(); l.blend = (BlendMode)bm; }
-    ImGui::SliderFloat("Fade (s)", &l.fadeTime, 0, 10, "%.2f");
+    if (ImGui::Combo(T("Mistura"), &bm, blends, 4)) { app.checkpoint(); l.blend = (BlendMode)bm; }
+    ImGui::SliderFloat(T("Fade (s)"), &l.fadeTime, 0, 10, "%.2f");
     undoOnActivate(app);
 
-    ImGui::SeparatorText("Região na composição");
-    if (ImGui::Checkbox("Usar região", &l.useRegion)) app.checkpoint();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Os vídeos desta layer encaixam neste retângulo da composição\n(ex.: a zona de um ledwall). Desligado = composição inteira.");
+    ImGui::SeparatorText(T("Região na composição"));
+    if (ImGui::Checkbox(T("Usar região"), &l.useRegion)) app.checkpoint();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Os vídeos desta layer encaixam neste retângulo da composição\n(ex.: a zona de um ledwall). Desligado = composição inteira."));
     if (l.useRegion) {
         rectEditor(app, "region", l.region, (float)p.comp.width, (float)p.comp.height);
-        if (ImGui::BeginCombo("Copiar de", "slice...")) {
+        if (ImGui::BeginCombo(T("Copiar de"), T("slice..."))) {
             for (auto& s : p.screens)
                 for (auto& sl : s.slices) {
                     std::string n = s.name + " / " + sl.name + "##" + std::to_string(sl.id);
@@ -155,7 +186,7 @@ static void propertiesWindow(App& app) {
         }
         if (ci >= 0 && ci < (int)l.clips.size() && !l.clips[ci].empty()) {
             auto th = ThumbnailCache::get().request(l.clips[ci].path);
-            if (th->state == ThumbnailCache::Entry::State::Ready && ImGui::Button("Tamanho = vídeo selecionado")) {
+            if (th->state == ThumbnailCache::Entry::State::Ready && ImGui::Button(T("Tamanho = vídeo selecionado"))) {
                 app.checkpoint(); l.region.w = (float)th->info.width; l.region.h = (float)th->info.height;
             }
         }
@@ -165,12 +196,13 @@ static void propertiesWindow(App& app) {
 }
 
 static void compSettingsPopup(App& app) {
-    if (app.ui.showCompSettings) { ImGui::OpenPopup("Definições da composição"); app.ui.showCompSettings = false; }
-    if (ImGui::BeginPopupModal("Definições da composição", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    std::string title = winTitle("Definições da composição", "compsettings");
+    if (app.ui.showCompSettings) { ImGui::OpenPopup(title.c_str()); app.ui.showCompSettings = false; }
+    if (ImGui::BeginPopupModal(title.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         Composition& c = app.project.comp;
         static int wh[2];
         if (ImGui::IsWindowAppearing()) { wh[0] = c.width; wh[1] = c.height; }
-        ImGui::InputInt2("Resolução", wh);
+        ImGui::InputInt2(T("Resolução"), wh);
         const struct { const char* n; int w, h; } presets[] = {
             {"1920x1080", 1920, 1080}, {"2560x1440", 2560, 1440}, {"3840x2160 (4K)", 3840, 2160},
             {"5760x1080 (3x HD)", 5760, 1080}, {"7680x1080 (4x HD)", 7680, 1080}, {"7680x2160 (2x 4K)", 7680, 2160},
@@ -180,39 +212,22 @@ static void compSettingsPopup(App& app) {
             ImGui::SameLine();
         }
         ImGui::NewLine();
-        ImGui::DragFloat("FPS de referência", &c.fps, 0.1f, 1, 240, "%.2f");
-        ImGui::TextDisabled("Máximo da GPU: 16384x16384. VRAM livre estimada: %zu MB", gfx().vramMB());
-        if (ImGui::Button("Aplicar", ImVec2(120, 0))) {
+        ImGui::DragFloat(T("FPS de referência"), &c.fps, 0.1f, 1, 240, "%.2f");
+        ImGui::TextDisabled(T("Máximo da GPU: 16384x16384. VRAM: %zu MB"), gfx().vramMB());
+        if (ImGui::Button(T("Aplicar"), ImVec2(120, 0))) {
             app.checkpoint();
             c.width = std::clamp(wh[0], 16, 16384);
             c.height = std::clamp(wh[1], 16, 16384);
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancelar", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-    }
-}
-
-static void aboutPopup(App& app) {
-    if (app.ui.showAbout) { ImGui::OpenPopup("Sobre o PLAYERSLICE"); app.ui.showAbout = false; }
-    if (ImGui::BeginPopupModal("Sobre o PLAYERSLICE", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "PLAYERSLICE %s", PLAYERSLICE_VERSION);
-        ImGui::Text("Player de vídeo para ecrãs LED fora de formato.");
-        ImGui::Separator();
-        ImGui::Text("Criado por Daniel Nunes");
-        if (ImGui::SmallButton("github.com/NunesDanielPT"))
-            ShellExecuteW(nullptr, L"open", L"https://github.com/NunesDanielPT", nullptr, nullptr, SW_SHOWNORMAL);
-        ImGui::Separator();
-        ImGui::TextDisabled("GPU: %s (%zu MB)", toUtf8(gfx().adapterName()).c_str(), gfx().vramMB());
-        ImGui::TextDisabled("Usa FFmpeg (LGPL/GPL), Dear ImGui, HAP (Vidvox), Snappy, nlohmann/json.");
-        if (ImGui::Button("Fechar", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        if (ImGui::Button(T("Cancelar"), ImVec2(120, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 }
 
 static void logWindow(App& app) {
-    if (!ImGui::Begin("Registo")) { ImGui::End(); return; }
+    if (!ImGui::Begin(winTitle("Registo", "log").c_str())) { ImGui::End(); return; }
     (void)app;
     auto entries = Log::recent(400);
     ImGui::BeginChild("log", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
@@ -227,24 +242,27 @@ static void logWindow(App& app) {
 
 static void statusBar(App& app) {
     ImGuiViewport* vp = ImGui::GetMainViewport();
-    float h = ImGui::GetFrameHeight() + 4;
+    float h = ImGui::GetFrameHeight() + 6;
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - h));
     ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, h));
     ImGuiWindowFlags f = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
     ImGui::Begin("##status", nullptr, f);
+    outputsButton(app, ImVec2(0, 0));
+    ImGui::SameLine(0, 14);
     int playing = 0, dropped = 0;
     for (auto& l : app.project.comp.layers)
         if (VideoPlayer* v = app.comp.activePlayer(l.id)) { playing++; dropped += v->dropped(); }
     ImVec4 fpsCol = app.fps >= 49 ? ImVec4(0.4f, 0.9f, 0.5f, 1) : app.fps >= 29 ? ImVec4(1, 0.75f, 0.3f, 1) : ImVec4(1, 0.4f, 0.4f, 1);
+    ImGui::AlignTextToFramePadding();
     ImGui::TextColored(fpsCol, "%.1f fps", app.fps);
     ImGui::SameLine(); ImGui::TextDisabled("|  %.2f ms", app.frameMs);
-    ImGui::SameLine(); ImGui::TextDisabled("|  clips a tocar: %d", playing);
-    ImGui::SameLine(); ImGui::TextDisabled("|  frames descartados: %d", dropped);
-    ImGui::SameLine(); ImGui::TextDisabled("|  saídas abertas: %d", app.outputs.count());
+    ImGui::SameLine(); ImGui::TextDisabled(T("|  clips a tocar: %d"), playing);
+    ImGui::SameLine(); ImGui::TextDisabled(T("|  frames descartados: %d"), dropped);
+    ImGui::SameLine(); ImGui::TextDisabled(T("|  saídas no ar: %d"), (int)app.liveScreens.size());
     ImGui::SameLine(); ImGui::TextDisabled("|  %s", toUtf8(gfx().adapterName()).c_str());
-    std::string name = app.projectPath.empty() ? "sem título" : toUtf8(app.projectPath);
+    std::string name = app.projectPath.empty() ? std::string(T("sem título")) : toUtf8(app.projectPath);
     ImGui::SameLine(); ImGui::TextDisabled("|  %s%s", name.c_str(), app.dirty ? " *" : "");
     ImGui::End();
     ImGui::PopStyleVar();
@@ -252,73 +270,81 @@ static void statusBar(App& app) {
 
 static void shortcuts(App& app) {
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantTextInput) return;
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) { if (io.KeyShift) app.saveAsDialog(); else app.saveOrSaveAs(); }
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) app.openDialog();
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) { if (io.KeyShift) app.redo(); else app.undo(); }
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) app.redo();
+    if (io.WantTextInput || shortcutCaptureActive()) return;
+    const Settings& s = settings();
+    for (int a = 0; a < (int)Action::Count; ++a) {
+        const KeyBinding& b = s.keys[a];
+        if (!b.key) continue;
+        if (b.ctrl != io.KeyCtrl || b.shift != io.KeyShift || b.alt != io.KeyAlt) continue;
+        if (ImGui::IsKeyPressed((ImGuiKey)b.key, false)) { app.runAction(a); break; }
+    }
 }
+
+static std::string menuKey(Action a) { return bindingLabel(settings().keys[(int)a]); }
 
 void drawUI(App& app) {
     shortcuts(app);
 
     if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("Ficheiro")) {
-            if (ImGui::MenuItem("Novo projeto")) {
-                if (!app.dirty || MessageBoxW(app.hwnd(), L"Descartar alterações?", L"PLAYERSLICE", MB_YESNO | MB_ICONQUESTION) == IDYES)
+        if (ImGui::BeginMenu(T("Ficheiro"))) {
+            if (ImGui::MenuItem(T("Novo projeto"))) {
+                if (!app.dirty || MessageBoxW(app.hwnd(), fromUtf8(T("Descartar alterações?")).c_str(), L"PLAYERSLICE", MB_YESNO | MB_ICONQUESTION) == IDYES)
                     app.newProject();
             }
-            if (ImGui::MenuItem("Abrir...", "Ctrl+O")) app.openDialog();
-            if (ImGui::MenuItem("Gravar", "Ctrl+S")) app.saveOrSaveAs();
-            if (ImGui::MenuItem("Gravar como...", "Ctrl+Shift+S")) app.saveAsDialog();
+            if (ImGui::MenuItem(T("Abrir..."), menuKey(Action::Open).c_str())) app.openDialog();
+            if (ImGui::MenuItem(T("Gravar"), menuKey(Action::Save).c_str())) app.saveOrSaveAs();
+            if (ImGui::MenuItem(T("Gravar como..."), menuKey(Action::SaveAs).c_str())) app.saveAsDialog();
             ImGui::Separator();
-            if (ImGui::MenuItem("Abrir pasta de registos")) ShellExecuteW(nullptr, L"open", appDataDir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            if (ImGui::MenuItem(T("Definições..."), menuKey(Action::Settings).c_str())) app.ui.showSettings = true;
             ImGui::Separator();
-            if (ImGui::MenuItem("Sair")) PostMessageW(app.hwnd(), WM_CLOSE, 0, 0);
+            if (ImGui::MenuItem(T("Sair"))) PostMessageW(app.hwnd(), WM_CLOSE, 0, 0);
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Editar")) {
-            if (ImGui::MenuItem("Desfazer", "Ctrl+Z", false, app.canUndo())) app.undo();
-            if (ImGui::MenuItem("Refazer", "Ctrl+Y", false, app.canRedo())) app.redo();
+        if (ImGui::BeginMenu(T("Editar"))) {
+            if (ImGui::MenuItem(T("Desfazer"), menuKey(Action::Undo).c_str(), false, app.canUndo())) app.undo();
+            if (ImGui::MenuItem(T("Refazer"), menuKey(Action::Redo).c_str(), false, app.canRedo())) app.redo();
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Composição")) {
-            if (ImGui::MenuItem("Definições...")) app.ui.showCompSettings = true;
-            if (ImGui::MenuItem("Adicionar layer")) { app.checkpoint(); app.project.addLayer("Layer " + std::to_string(app.project.comp.layers.size() + 1)); }
-            if (ImGui::MenuItem("Adicionar coluna")) { app.checkpoint(); app.project.ensureColumns((int)app.project.comp.columns.size() + 1); }
+        if (ImGui::BeginMenu(T("Composição"))) {
+            if (ImGui::MenuItem(T("Definições da composição..."))) app.ui.showCompSettings = true;
+            if (ImGui::MenuItem(T("Adicionar layer"))) { app.checkpoint(); app.project.addLayer("Layer " + std::to_string(app.project.comp.layers.size() + 1)); }
+            if (ImGui::MenuItem(T("Adicionar coluna"))) { app.checkpoint(); app.project.ensureColumns((int)app.project.comp.columns.size() + 1); }
             ImGui::Separator();
-            if (ImGui::MenuItem("Parar tudo")) app.comp.stopAll(app.project);
+            if (ImGui::MenuItem(T("Parar tudo"), menuKey(Action::StopAll).c_str())) app.comp.stopAll(app.project);
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Saídas")) {
-            if (ImGui::MenuItem("Editor de saídas e slices")) app.ui.focusEditor = true;
-            if (ImGui::MenuItem("Detetar monitores de novo")) app.refreshDisplays();
+        if (ImGui::BeginMenu(T("Saídas"))) {
+            if (ImGui::MenuItem(T("Ligar/desligar saídas marcadas"), menuKey(Action::ToggleOutputs).c_str())) app.toggleOutputs();
+            if (ImGui::MenuItem(T("Ligar todas as saídas"), menuKey(Action::OutputsOn).c_str())) app.setAllOutputs(true);
+            if (ImGui::MenuItem(T("Desligar todas as saídas"), menuKey(Action::OutputsOff).c_str())) app.setAllOutputs(false);
             ImGui::Separator();
-            bool anyLive = false;
-            for (auto& s : app.project.screens) if (s.device != ScreenDevice::Disabled) anyLive = true;
-            if (ImGui::MenuItem("Desligar todas as saídas", nullptr, false, anyLive)) {
-                app.checkpoint();
-                for (auto& s : app.project.screens) s.device = ScreenDevice::Disabled;
-            }
+            if (ImGui::MenuItem(T("Editor de saídas e slices"), menuKey(Action::OutputEditor).c_str())) app.ui.focusEditor = true;
+            if (ImGui::MenuItem(T("Detetar monitores de novo"))) app.refreshDisplays();
             ImGui::Separator();
-            ImGui::TextDisabled("Saídas detetadas:");
+            ImGui::TextDisabled("%s", T("Saídas detetadas:"));
             for (auto& d : app.displays) ImGui::TextDisabled("  %s", d.label().c_str());
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Ver")) {
-            if (ImGui::MenuItem("Repor disposição das janelas")) app.ui.layoutBuilt = false;
+        if (ImGui::BeginMenu(T("Ver"))) {
+            if (ImGui::MenuItem(T("Repor disposição das janelas"))) app.ui.layoutBuilt = false;
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Ajuda")) {
-            if (ImGui::MenuItem("Sobre o PLAYERSLICE")) app.ui.showAbout = true;
+        if (ImGui::BeginMenu(T("Ajuda"))) {
+            if (ImGui::MenuItem(T("Atalhos de teclado"))) { app.ui.showSettings = true; app.ui.settingsTab = 4; }
+            if (ImGui::MenuItem(T("Sobre o PLAYERSLICE"))) { app.ui.showSettings = true; app.ui.settingsTab = 5; }
             ImGui::EndMenu();
         }
+        // indicador à direita na barra de menus
+        const char* st = app.anyLive() ? T("● NO AR") : T("○ saídas desligadas");
+        float tw = ImGui::CalcTextSize(st).x;
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - tw - 16);
+        ImGui::TextColored(app.anyLive() ? ImVec4(1, 0.3f, 0.3f, 1) : ImVec4(0.55f, 0.55f, 0.58f, 1), "%s", st);
         ImGui::EndMainMenuBar();
     }
 
     // dockspace por baixo de tudo (deixando espaço para a barra de estado)
     ImGuiViewport* vp = ImGui::GetMainViewport();
-    float statusH = ImGui::GetFrameHeight() + 4;
+    float statusH = ImGui::GetFrameHeight() + 6;
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, vp->WorkSize.y - statusH));
     ImGuiWindowFlags hf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
@@ -344,7 +370,8 @@ void drawUI(App& app) {
     logWindow(app);
     statusBar(app);
     compSettingsPopup(app);
-    aboutPopup(app);
+    drawSettings(app);
+    drawUpdatePopup(app);
 
     // aviso: saída em ecrã cheio por cima da interface
     HMONITOR mine = MonitorFromWindow(app.hwnd(), MONITOR_DEFAULTTONEAREST);
@@ -352,7 +379,7 @@ void drawUI(App& app) {
         ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 40), ImGuiCond_Always, ImVec2(0.5f, 0));
         ImGui::SetNextWindowBgAlpha(0.9f);
         ImGui::Begin("##warn", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::TextColored(ImVec4(1, 0.75f, 0.3f, 1), "Uma saída está no mesmo monitor que a interface.");
+        ImGui::TextColored(ImVec4(1, 0.75f, 0.3f, 1), "%s", T("Uma saída está no mesmo monitor que a interface."));
         ImGui::End();
     }
 }

@@ -63,6 +63,9 @@ add_executable(PLAYERSLICE WIN32
   src/core/Model.cpp
   src/core/CrashHandler.cpp
   src/core/ThreadPool.cpp
+  src/core/I18n.cpp
+  src/core/Settings.cpp
+  src/core/Updater.cpp
   src/gfx/Gfx.cpp
   src/gfx/Displays.cpp
   src/video/VideoPlayer.cpp
@@ -73,6 +76,7 @@ add_executable(PLAYERSLICE WIN32
   src/ui/ClipGrid.cpp
   src/ui/SliceEditor.cpp
   src/ui/Theme.cpp
+  src/ui/SettingsWindow.cpp
   res/app.rc)
 
 target_include_directories(PLAYERSLICE PRIVATE src ${FFMPEG_DIR}/include)
@@ -95,7 +99,7 @@ endif()
 
 target_link_libraries(PLAYERSLICE PRIVATE
   imgui hap nlohmann_json::nlohmann_json
-  d3d11 dxgi d3dcompiler dbghelp shell32 winmm ole32 dwmapi shcore comdlg32)
+  d3d11 dxgi d3dcompiler dbghelp shell32 winmm ole32 dwmapi shcore comdlg32 winhttp iphlpapi ws2_32 uuid)
 
 # Copiar DLLs do FFmpeg para junto do .exe
 file(GLOB FFMPEG_DLLS "${FFMPEG_DIR}/bin/*.dll")
