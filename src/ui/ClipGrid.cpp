@@ -3,6 +3,7 @@
 //   Ctrl+clique / Shift+clique = selecionar vários; Ctrl+C / Ctrl+V / Ctrl+X / Delete
 //   Arrastar clips entre células, colunas pelo cabeçalho, efeitos do painel Efeitos
 #include "ui/UI.h"
+#include <functional>
 #include "core/Timecode.h"
 #include "core/I18n.h"
 #include "app/App.h"
@@ -102,6 +103,18 @@ void colorSwatches(App& app, uint32_t& target) {
 }
 
 // mover/inserir/apagar colunas mantendo o estado em execução coerente
+// cues da stack visível acompanham as colunas movidas/inseridas/apagadas
+static void remapCues(App& app, const std::function<int(int)>& map) {
+    Project& p = app.project;
+    auto& q = p.comp.cues;
+    for (int i = (int)q.size() - 1; i >= 0; --i) {
+        if (q[i].stack != p.comp.activeStack) continue;
+        int nc = map(q[i].column);
+        if (nc < 0) q[i].column = std::max(0, q[i].column - 1);   // coluna apagada: fica na anterior
+        else q[i].column = nc;
+    }
+}
+
 void moveColumn(App& app, int from, int to) {
     Project& p = app.project;
     int n = (int)p.comp.columns.size();
@@ -110,12 +123,14 @@ void moveColumn(App& app, int from, int to) {
     auto mv = [&](auto& v) { auto x = v[from]; v.erase(v.begin() + from); v.insert(v.begin() + to, x); };
     mv(p.comp.columns);
     for (auto& l : p.comp.layers) if ((int)l.clips.size() == n) mv(l.clips);
-    app.comp.remapColumns(p, [&](int c) {
+    auto mapFn = [&](int c) {
         if (c == from) return to;
         if (from < to && c > from && c <= to) return c - 1;
         if (from > to && c >= to && c < from) return c + 1;
         return c;
-    });
+    };
+    app.comp.remapColumns(p, mapFn);
+    remapCues(app, mapFn);
     app.ui.selCells.clear();
     if (app.ui.selColumnProp == from) app.ui.selColumnProp = to;
 }
@@ -132,6 +147,7 @@ static void insertColumn(App& app, int at, const Column* copyFrom) {
     }
     p.comp.columns.insert(p.comp.columns.begin() + at, c);
     app.comp.remapColumns(p, [&](int x) { return x >= at ? x + 1 : x; });
+    remapCues(app, [&](int x) { return x >= at ? x + 1 : x; });
     app.ui.selCells.clear();
 }
 
@@ -140,6 +156,7 @@ static void deleteColumn(App& app, int c) {
     if ((int)p.comp.columns.size() <= 1) return;
     app.checkpoint();
     app.comp.remapColumns(p, [&](int x) { return x == c ? -1 : (x > c ? x - 1 : x); });
+    remapCues(app, [&](int x) { return x == c ? -1 : (x > c ? x - 1 : x); });
     for (auto& l : p.comp.layers) if (c < (int)l.clips.size()) l.clips.erase(l.clips.begin() + c);
     p.comp.columns.erase(p.comp.columns.begin() + c);
     app.ui.selCells.clear();
@@ -194,6 +211,37 @@ static void pasteClipboard(App& app) {
         ++pasted;
     }
     PS_INFO("%d clip(s) colado(s)", pasted);
+}
+
+// definições de clip: tudo menos o ficheiro, o nome, o trim e a hora de timecode
+void copyClipSettings(App& app, const Clip& c) {
+    app.ui.clipSettings = c;
+    app.ui.hasClipSettings = true;
+    PS_INFO("%s", T("Definições do clip copiadas"));
+}
+
+int pasteClipSettings(App& app) {
+    if (!app.ui.hasClipSettings) return 0;
+    Project& p = app.project;
+    std::set<std::pair<uint32_t, int>> cells = app.ui.selCells;
+    if (cells.empty() && app.ui.selLayer >= 0 && app.ui.selLayer < (int)p.comp.layers.size() && app.ui.selColumn >= 0)
+        cells.insert({p.comp.layers[app.ui.selLayer].id, app.ui.selColumn});
+    const Clip& s = app.ui.clipSettings;
+    int n = 0;
+    bool cp = false;
+    for (auto& [lid, ci] : cells) {
+        int li = p.layerIndex(lid);
+        if (li < 0 || p.comp.layers[li].locked || ci < 0 || ci >= (int)p.comp.layers[li].clips.size()) continue;
+        Clip& d = p.comp.layers[li].clips[ci];
+        if (d.empty()) continue;
+        if (!cp) { app.checkpoint(); cp = true; }
+        d.loop = s.loop; d.speed = s.speed; d.opacity = s.opacity; d.fit = s.fit;
+        d.offsetX = s.offsetX; d.offsetY = s.offsetY; d.scale = s.scale; d.scaleX = s.scaleX; d.scaleY = s.scaleY;
+        d.rotation = s.rotation; d.flipH = s.flipH; d.flipV = s.flipV; d.effects = s.effects; d.tcMode = s.tcMode;
+        ++n;
+    }
+    if (n) { app.markDirty(); PS_INFO(T("Definições coladas em %d clip(s)"), n); }
+    return n;
 }
 
 static void deleteSelection(App& app) {
@@ -535,6 +583,10 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
         if (ImGui::MenuItem(T("Cortar"), "Ctrl+X", false, (!c.empty() || !app.ui.selCells.empty()) && !l.locked)) copySelection(app, true);
         if (ImGui::MenuItem(T("Colar"), "Ctrl+V", false, !app.ui.clipboard.empty() && !l.locked)) pasteClipboard(app);
         ImGui::Separator();
+        if (ImGui::MenuItem(T("Copiar definições"), "Ctrl+Shift+C", false, !c.empty())) copyClipSettings(app, c);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Repetição, velocidade, opacidade, encaixe, transformar, efeitos e modo de timecode."));
+        if (ImGui::MenuItem(T("Colar definições"), "Ctrl+Shift+V", false, app.ui.hasClipSettings && !c.empty() && !l.locked)) pasteClipSettings(app);
+        ImGui::Separator();
         if (ImGui::MenuItem(T("Copiar efeitos"), nullptr, false, !c.effects.empty())) app.ui.fxClipboard = c.effects;
         if (ImGui::MenuItem(T("Colar efeitos"), nullptr, false, !c.empty() && !app.ui.fxClipboard.empty())) {
             app.checkpoint(); c.effects.insert(c.effects.end(), app.ui.fxClipboard.begin(), app.ui.fxClipboard.end());
@@ -589,6 +641,25 @@ static bool columnHeader(App& app, int c, float cellW) {
         if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left))
             ImGui::SetTooltip("%s", T("Clique: pôr a coluna inteira no ar · Arrastar: mudar a ordem · Duplo clique: renomear"));
         ImVec2 h0 = ImGui::GetItemRectMin(), h1 = ImGui::GetItemRectMax();
+        {
+            std::string qs;
+            for (auto& q : p.comp.cues) if (q.stack == p.comp.activeStack && q.column == c) { if (!qs.empty()) qs += ","; qs += q.number; }
+            if (!qs.empty()) {
+                qs = "Q" + qs;
+                ImDrawList* d = ImGui::GetWindowDrawList();
+                ImVec2 ts = ImGui::CalcTextSize(qs.c_str());
+                ImVec2 q0(h0.x + 3, h0.y + (h1.y - h0.y - ts.y) * 0.5f);
+                d->AddRectFilled(ImVec2(q0.x - 2, q0.y), ImVec2(q0.x + ts.x + 2, q0.y + ts.y), IM_COL32(30, 110, 70, 230), 3);
+                d->AddText(q0, IM_COL32(255, 255, 255, 255), qs.c_str());
+            }
+            if (col.tcTrigger) {
+                ImDrawList* d = ImGui::GetWindowDrawList();
+                ImVec2 ts = ImGui::CalcTextSize("TC");
+                ImVec2 q0(h1.x - ts.x - 5, h0.y + (h1.y - h0.y - ts.y) * 0.5f);
+                d->AddRectFilled(ImVec2(q0.x - 2, q0.y), ImVec2(q0.x + ts.x + 2, q0.y + ts.y), IM_COL32(220, 130, 30, 230), 3);
+                d->AddText(q0, IM_COL32(255, 255, 255, 255), "TC");
+            }
+        }
         if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
             int pl[2] = {c, 0};
             ImGui::SetDragDropPayload("PS_COL", pl, sizeof(pl));
@@ -775,9 +846,16 @@ void drawClipGrid(App& app) {
     // atalhos da grelha (só com a janela de clips ativa)
     ImGuiIO& io = ImGui::GetIO();
     if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !io.WantTextInput) {
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) copySelection(app, false);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X, false)) copySelection(app, true);
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false)) pasteClipboard(app);
+        const bool sh = io.KeyShift;
+        if (io.KeyCtrl && sh && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+            int li = app.ui.selLayer, ci = app.ui.selColumn;
+            if (li >= 0 && li < (int)p.comp.layers.size() && ci >= 0 && ci < (int)p.comp.layers[li].clips.size() && !p.comp.layers[li].clips[ci].empty())
+                copyClipSettings(app, p.comp.layers[li].clips[ci]);
+        }
+        if (io.KeyCtrl && sh && ImGui::IsKeyPressed(ImGuiKey_V, false)) pasteClipSettings(app);
+        if (io.KeyCtrl && !sh && ImGui::IsKeyPressed(ImGuiKey_C, false)) copySelection(app, false);
+        if (io.KeyCtrl && !sh && ImGui::IsKeyPressed(ImGuiKey_X, false)) copySelection(app, true);
+        if (io.KeyCtrl && !sh && ImGui::IsKeyPressed(ImGuiKey_V, false)) pasteClipboard(app);
         if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
             if (app.ui.selCells.empty() && app.ui.selLayer >= 0 && app.ui.selLayer < (int)p.comp.layers.size() && app.ui.selColumn >= 0)
                 app.ui.selCells.insert({p.comp.layers[app.ui.selLayer].id, app.ui.selColumn});

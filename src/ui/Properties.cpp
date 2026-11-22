@@ -106,6 +106,12 @@ static void compositionPanel(App& app) {
     if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
     if (ImGui::CollapsingHeader(T("Composição##sec"), ImGuiTreeNodeFlags_DefaultOpen))
         param(app, T("Master"), &c.master, 0, 1, 1, "%.2f");
+    if (ImGui::CollapsingHeader(T("Transição entre clips"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        const char* tr[] = {T("Corte"), T("Dissolve")};
+        if (ImGui::Combo(T("Tipo##trans"), &c.transition, tr, 2)) { app.checkpoint(); app.markDirty(); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Dissolve: ao mudar de coluna ou de clip, a imagem nova aparece por cima da anterior durante este tempo.\nUma layer com Fade próprio (> 0) usa o seu."));
+        if (c.transition == 1) param(app, T("Duração (s)"), &c.transitionTime, 0, 10, 0.5f, "%.2f s");
+    }
     if (ImGui::CollapsingHeader(T("Efeitos##comp"), ImGuiTreeNodeFlags_DefaultOpen))
         effectsEditor(app, c.effects, "compfx");
     endPanel();
@@ -172,6 +178,8 @@ static void columnPanel(App& app) {
     ImGui::Spacing();
     if (ImGui::Button(T("Pôr a coluna no ar"), ImVec2(-1, 0))) app.comp.triggerColumn(p, c);
     ImGui::Spacing();
+    if (ImGui::CollapsingHeader(T("Timecode##col"), col.tcTrigger ? ImGuiTreeNodeFlags_DefaultOpen : 0)) columnTimecodeControls(app, col);
+    ImGui::Spacing();
     ImGui::SeparatorText(T("Clips nesta coluna"));
     int n = 0;
     for (auto& l : p.comp.layers) {
@@ -185,6 +193,111 @@ static void columnPanel(App& app) {
 }
 
 void clipTransformControls(App& app, Clip& c);
+
+static std::string fmtSec(double s) {
+    if (s < 0) s = 0;
+    char b[32];
+    int m = (int)(s / 60);
+    snprintf(b, sizeof(b), "%02d:%05.2f", m, s - m * 60);
+    return b;
+}
+
+// Transporte (como o Resolume): timeline com cabeça de leitura, Trim In / Trim Out, pausa e saltar
+static void clipTransport(App& app, Layer& l, int ci, Clip& c, double fileDur) {
+    Project& p = app.project;
+    VideoPlayer* v = nullptr;
+    if (l.activeColumn == ci) v = app.comp.activePlayer(l.id);
+    else if (app.comp.previewLayerId() == l.id && app.comp.previewColumn() == ci && app.comp.previewStack() == p.comp.activeStack) v = app.comp.previewPlayer();
+    if (v && v->info().duration > 0) fileDur = v->info().duration;
+    if (fileDur <= 0) { ImGui::TextDisabled("%s", T("A ler a duração...")); return; }
+    const double dur = fileDur;
+    double in = std::clamp(c.trimIn, 0.0, dur), out = c.trimOut > 0 ? std::clamp(c.trimOut, in + 0.04, dur) : dur;
+    double len = std::max(0.04, out - in);
+    double pos = -1;
+    if (v) {
+        double ph = std::max(0.0, v->position());
+        pos = in + (c.loop == LoopMode::Loop ? std::fmod(ph, len) : std::min(ph, len));
+    }
+    // textos
+    ImGui::TextDisabled("In %s", fmtSec(in).c_str());
+    std::string mid = pos >= 0 ? fmtSec(pos - in) + " / " + fmtSec(len) : fmtSec(len);
+    float aw = ImGui::GetContentRegionAvail().x;
+    ImGui::SameLine(std::max(80.f, aw * 0.5f - ImGui::CalcTextSize(mid.c_str()).x * 0.5f));
+    ImGui::TextColored(pos >= 0 ? ImVec4(0.25f, 0.88f, 0.75f, 1) : ImVec4(0.75f, 0.76f, 0.8f, 1), "%s", mid.c_str());
+    std::string outS = "Out " + fmtSec(out);
+    ImGui::SameLine(std::max(160.f, aw - ImGui::CalcTextSize(outS.c_str()).x));
+    ImGui::TextDisabled("%s", outS.c_str());
+
+    // barra
+    const float w = std::max(60.f, aw), h = 30, pad = 7;
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton("##timeline", ImVec2(w, h));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    auto X = [&](double t) { return p0.x + pad + (w - 2 * pad) * (float)(t / dur); };
+    auto Tm = [&](float x) { return std::clamp((double)(x - p0.x - pad) / (w - 2 * pad) * dur, 0.0, dur); };
+    float ty0 = p0.y + 12, ty1 = p0.y + 20;
+    dl->AddRectFilled(ImVec2(p0.x + pad, ty0), ImVec2(p0.x + w - pad, ty1), IM_COL32(30, 31, 35, 255), 3);
+    dl->AddRectFilled(ImVec2(X(in), ty0), ImVec2(X(out), ty1), IM_COL32(40, 110, 96, 255), 3);
+    if (pos >= 0) dl->AddRectFilled(ImVec2(X(in), ty0), ImVec2(X(pos), ty1), IM_COL32(64, 200, 170, 255), 3);
+    // pegas Trim In / Trim Out
+    auto handle = [&](double t, bool isIn) {
+        float x = X(t);
+        ImU32 hc = IM_COL32(64, 224, 192, 255);
+        dl->AddRectFilled(ImVec2(x - 2, ty0 - 6), ImVec2(x + 2, ty1 + 6), hc);
+        if (isIn) dl->AddTriangleFilled(ImVec2(x, ty1 + 6), ImVec2(x + 7, ty1 + 6), ImVec2(x, ty1 + 1), hc);
+        else dl->AddTriangleFilled(ImVec2(x, ty1 + 6), ImVec2(x - 7, ty1 + 6), ImVec2(x, ty1 + 1), hc);
+    };
+    handle(in, true); handle(out, false);
+    if (pos >= 0) {
+        float x = X(pos);
+        dl->AddTriangleFilled(ImVec2(x - 6, p0.y + 1), ImVec2(x + 6, p0.y + 1), ImVec2(x, p0.y + 10), IM_COL32(240, 240, 245, 255));
+        dl->AddLine(ImVec2(x, p0.y + 8), ImVec2(x, ty1), IM_COL32(240, 240, 245, 255), 2);
+    }
+    // interação
+    static int drag = 0;   // 1 In, 2 Out, 3 cabeça de leitura
+    static double lastSeek = -1, lastSeekAt = 0;
+    ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::IsItemActivated()) {
+        float mx = io.MousePos.x;
+        if (std::fabs(mx - X(in)) < 9) drag = 1;
+        else if (std::fabs(mx - X(out)) < 9) drag = 2;
+        else drag = 3;
+        if (drag != 3) app.checkpoint();
+        lastSeek = -1;
+    }
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
+        float mx = io.MousePos.x;
+        if (std::fabs(mx - X(in)) < 9 || std::fabs(mx - X(out)) < 9) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        ImGui::SetTooltip("%s", T("Arrasta as pegas para o Trim In / Trim Out; clica ou arrasta na barra para saltar (clip no ar ou em preview)."));
+    }
+    if (ImGui::IsItemActive()) {
+        double t = Tm(io.MousePos.x);
+        if (drag == 1) { c.trimIn = std::clamp(t, 0.0, out - 0.1); app.markDirty(); }
+        else if (drag == 2) { double o = std::clamp(t, in + 0.1, dur); c.trimOut = o >= dur - 0.001 ? 0.0 : o; app.markDirty(); }
+        else if (drag == 3 && v) {
+            double target = std::clamp(t, in, out) - in;
+            double now = ImGui::GetTime();
+            if (std::fabs(target - lastSeek) > 0.02 && now - lastSeekAt > 0.04) { v->seek(target); lastSeek = target; lastSeekAt = now; }
+        }
+    }
+    if (ImGui::IsItemDeactivated()) drag = 0;
+
+    // botões
+    ImGui::BeginDisabled(!v);
+    if (ImGui::Button(T("Recomeçar"))) v->seek(0);
+    ImGui::SameLine();
+    bool paused = v && v->paused();
+    if (ImGui::Button(paused ? T("Play") : T("Pausa"), ImVec2(70, 0))) v->setPaused(!paused);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button(T("Repor trim"))) { app.checkpoint(); c.trimIn = 0; c.trimOut = 0; app.markDirty(); }
+    ImGui::SameLine();
+    ImGui::TextDisabled(T("Duração %s"), fmtSec(len / std::max(0.01f, c.speed)).c_str());
+    float fin = (float)in, fout = (float)out;
+    if (param(app, T("Trim In (s)"), &fin, 0, (float)dur, 0, "%.2f s")) c.trimIn = std::clamp((double)fin, 0.0, out - 0.1);
+    if (param(app, T("Trim Out (s)"), &fout, 0, (float)dur, (float)dur, "%.2f s")) { double o = std::clamp((double)fout, c.trimIn + 0.1, dur); c.trimOut = o >= dur - 0.001 ? 0.0 : o; }
+}
+
 static void clipPanel(App& app) {
     if (!beginPanel("Clip", "props_clip", &app.ui.panel.propClip)) return;
     Project& p = app.project;
@@ -208,6 +321,15 @@ static void clipPanel(App& app) {
         if (mi.codec != "hap" && (mi.width * mi.height >= 3840 * 2160 || mi.width >= 7680))
             ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), "%s", T("Dica: para vídeos muito grandes usa HAP / HAP Q."));
     }
+    if (ImGui::SmallButton(T("Copiar definições"))) copyClipSettings(app, c);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Repetição, velocidade, opacidade, encaixe, transformar, efeitos e modo de timecode (Ctrl+Shift+C)."));
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!app.ui.hasClipSettings);
+    if (ImGui::SmallButton(T("Colar definições"))) pasteClipSettings(app);
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", T("Cola nos clips selecionados (Ctrl/Shift+clique para escolher vários) — Ctrl+Shift+V."));
+    if (ImGui::CollapsingHeader(T("Transporte##clip"), ImGuiTreeNodeFlags_DefaultOpen))
+        clipTransport(app, l, ci, c, th->state == ThumbnailCache::Entry::State::Ready ? th->info.duration : 0);
     if (VideoPlayer* v = app.comp.activePlayer(l.id); v && l.activeColumn == ci) {
         MediaInfo mi = v->info();
         ImGui::TextDisabled(T("A tocar: %s  ·  fila %d  ·  descartados %d"), mi.codec.c_str(), v->queued(), v->dropped());

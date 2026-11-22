@@ -263,6 +263,8 @@ void App::runAction(int a) {
     case Action::PrevStack:     selectStack(project.comp.activeStack - 1); break;
     case Action::NextStack:     selectStack(project.comp.activeStack + 1); break;
     case Action::NewStack:      newStack(false); break;
+    case Action::CueGo:         cueGo(); break;
+    case Action::CueBack:       cueBack(); break;
     default:
         if (a >= (int)Action::Column1 && a <= (int)Action::Column9) comp.triggerColumn(project, a - (int)Action::Column1);
         break;
@@ -350,6 +352,20 @@ void App::timecodeTriggers() {
     if (prev < 0) { prev = t; return; }
     const bool jump = t < prev - 0.001 || t - prev > 0.5;
     Project& p = project;
+    // colunas com hora marcada (a mais recente que foi atravessada ganha)
+    {
+        int best = -1; double bestT = -1;
+        for (int c = 0; c < (int)p.comp.columns.size(); ++c) {
+            const Column& col = p.comp.columns[c];
+            if (!col.tcTrigger) continue;
+            bool hit = !jump ? (prev < col.tcStart && t >= col.tcStart) : (t >= col.tcStart && t < col.tcStart + 0.5);
+            if (hit && col.tcStart >= bestT) { best = c; bestT = col.tcStart; }
+        }
+        if (best >= 0) {
+            comp.triggerColumn(p, best);
+            PS_INFO("Timecode %s: %s", tcFormat(t, st.fps).c_str(), p.comp.columns[best].name.c_str());
+        }
+    }
     for (int li = 0; li < (int)p.comp.layers.size(); ++li) {
         Layer& l = p.comp.layers[li];
         int best = -1; double bestStart = -1;
@@ -373,6 +389,39 @@ void App::timecodeTriggers() {
     }
     prev = t;
 }
+
+int App::findCue(const std::string& number) const {
+    const auto& q = project.comp.cues;
+    for (int i = 0; i < (int)q.size(); ++i) if (q[i].number == number) return i;
+    // "3" também encontra "3.0" e vice-versa
+    char* e = nullptr;
+    double v = strtod(number.c_str(), &e);
+    if (e && *e == 0 && !number.empty())
+        for (int i = 0; i < (int)q.size(); ++i) {
+            char* e2 = nullptr; double w = strtod(q[i].number.c_str(), &e2);
+            if (e2 && *e2 == 0 && !q[i].number.empty() && std::fabs(v - w) < 1e-6) return i;
+        }
+    return -1;
+}
+
+void App::fireCue(int i) {
+    auto& q = project.comp.cues;
+    if (i < 0 || i >= (int)q.size()) return;
+    const Cue& c = q[i];
+    if (c.stack < 0 || c.stack >= (int)project.comp.stacks.size()) { PS_WARN("Cue %s: stack inexistente", c.number.c_str()); return; }
+    if (c.stack != project.comp.activeStack) selectStack(c.stack);
+    if (c.column < 0 || c.column >= (int)project.comp.columns.size()) { PS_WARN("Cue %s: coluna inexistente", c.number.c_str()); return; }
+    comp.triggerColumn(project, c.column);
+    cueIndex = i;
+    PS_INFO("Cue %s %s → %s / %s", c.number.c_str(), c.name.c_str(), project.comp.stacks[c.stack].name.c_str(), project.comp.columns[c.column].name.c_str());
+    if (settings().oscOut) {
+        Osc::get().send("/playerslice/cue/current", c.number);
+        Osc::get().send("/playerslice/cue/name", c.name);
+    }
+}
+
+void App::cueGo() { fireCue(cueIndex + 1 < (int)project.comp.cues.size() ? cueIndex + 1 : cueIndex); }
+void App::cueBack() { fireCue(std::max(0, cueIndex - 1)); }
 
 bool App::anyTestPattern() const {
     for (auto& s : project.screens) if (s.testPattern) return true;
@@ -450,6 +499,26 @@ void App::handleOsc() {
             } else if (a[1] == "testpattern" && press) {
                 runAction((int)Action::TestPattern);
             } else if (a[1] == "stopall" && press) comp.stopAll(p);
+            else if (a[1] == "cue" && a.size() >= 3) {
+                // /playerslice/cue/go | back | fire <número> | /playerslice/cue/<número>
+                if (a[2] == "go") { if (press) cueGo(); }
+                else if (a[2] == "back") { if (press) cueBack(); }
+                else if (a[2] == "fire") {
+                    std::string n;
+                    if (!m.args.empty()) {
+                        const OscArg& g = m.args[0];
+                        if (g.type == 's') n = g.s;
+                        else { char b[32]; float f = g.asFloat(); snprintf(b, sizeof(b), f == std::floor(f) ? "%.0f" : "%g", f); n = b; }
+                    }
+                    int i = findCue(n);
+                    if (i >= 0) fireCue(i); else PS_WARN("OSC: cue %s não existe", n.c_str());
+                } else if (press) {
+                    std::string n = a[2];
+                    for (size_t k = 3; k < a.size(); ++k) n += "/" + a[k];
+                    int i = findCue(n);
+                    if (i >= 0) fireCue(i); else PS_WARN("OSC: cue %s não existe", n.c_str());
+                }
+            }
         }
     }
 

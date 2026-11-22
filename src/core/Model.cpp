@@ -101,6 +101,7 @@ int Project::addStack(const std::string& name, bool duplicateActive) {
     }
     s.name = name;
     comp.stacks.insert(comp.stacks.begin() + comp.activeStack + 1, s);
+    for (auto& q : comp.cues) if (q.stack > comp.activeStack) q.stack++;
     int idx = comp.activeStack + 1;
     comp.activeStack = idx;          // os dados em uso ainda são da stack anterior, já guardados
     loadStack(*this, comp.stacks[idx]);
@@ -111,6 +112,11 @@ void Project::removeStack(int i) {
     if (comp.stacks.size() <= 1 || i < 0 || i >= (int)comp.stacks.size()) return;
     storeActiveStack();
     comp.stacks.erase(comp.stacks.begin() + i);
+    for (auto it = comp.cues.begin(); it != comp.cues.end();) {
+        if (it->stack == i) { it = comp.cues.erase(it); continue; }
+        if (it->stack > i) it->stack--;
+        ++it;
+    }
     if (comp.activeStack >= i && comp.activeStack > 0) comp.activeStack--;
     comp.activeStack = std::clamp(comp.activeStack, 0, (int)comp.stacks.size() - 1);
     loadStack(*this, comp.stacks[comp.activeStack]);
@@ -123,6 +129,11 @@ void Project::moveStack(int from, int to) {
     Stack s = comp.stacks[from];
     comp.stacks.erase(comp.stacks.begin() + from);
     comp.stacks.insert(comp.stacks.begin() + to, s);
+    for (auto& q : comp.cues) {
+        if (q.stack == from) q.stack = to;
+        else if (from < to && q.stack > from && q.stack <= to) q.stack--;
+        else if (from > to && q.stack >= to && q.stack < from) q.stack++;
+    }
     int a = comp.activeStack;
     if (a == from) a = to;
     else if (from < a && to >= a) a--;
@@ -226,12 +237,17 @@ static json clipJ(const Clip& cl) {
         cj["rotation"] = cl.rotation; cj["flipH"] = cl.flipH; cj["flipV"] = cl.flipV; cj["effects"] = fxJ(cl.effects);
         cj["stretch"] = {cl.scaleX, cl.scaleY};
         if (cl.tcMode != TcMode::Off) { cj["tcMode"] = (int)cl.tcMode; cj["tcStart"] = cl.tcStart; }
+        if (cl.trimIn > 0 || cl.trimOut > 0) cj["trim"] = {cl.trimIn, cl.trimOut};
     }
     return cj;
 }
 static json columnsJ(const std::vector<Column>& cols) {
     json a = json::array();
-    for (auto& col : cols) a.push_back({{"name", col.name}, {"color", col.color}});
+    for (auto& col : cols) {
+        json c = {{"name", col.name}, {"color", col.color}};
+        if (col.tcTrigger) { c["tcTrigger"] = true; c["tcStart"] = col.tcStart; }
+        a.push_back(c);
+    }
     return a;
 }
 
@@ -259,6 +275,9 @@ std::string Project::toJson() const {
         c["layers"].push_back(lj);
     }
     c["activeStack"] = comp.activeStack;
+    c["transition"] = comp.transition; c["transitionTime"] = comp.transitionTime;
+    c["cues"] = json::array();
+    for (auto& q : comp.cues) c["cues"].push_back({{"number", q.number}, {"name", q.name}, {"stack", q.stack}, {"column", q.column}});
     c["stacks"] = json::array();
     for (int si = 0; si < (int)comp.stacks.size(); ++si) {
         const Stack& s = comp.stacks[si];
@@ -322,13 +341,14 @@ static Clip clipFrom(const json& cj) {
         if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
         int tm = 0; get(cj, "tcMode", tm); cl.tcMode = (TcMode)std::clamp(tm, 0, 3);
         get(cj, "tcStart", cl.tcStart);
+        if (cj.contains("trim") && cj["trim"].size() == 2) { cl.trimIn = std::max(0.0, (double)cj["trim"][0]); cl.trimOut = std::max(0.0, (double)cj["trim"][1]); }
     }
     return cl;
 }
 static Column columnFrom(const json& cj) {
     Column col;
     if (cj.is_string()) col.name = cj.get<std::string>();          // formato antigo
-    else if (cj.is_object()) { get(cj, "name", col.name); get(cj, "color", col.color); }
+    else if (cj.is_object()) { get(cj, "name", col.name); get(cj, "color", col.color); get(cj, "tcTrigger", col.tcTrigger); get(cj, "tcStart", col.tcStart); }
     return col;
 }
 
@@ -374,6 +394,13 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             p.comp.stacks.push_back(std::move(s));
         }
         if (p.comp.stacks.empty()) { p.comp.stacks.push_back(Stack{"Stack 1"}); act = 0; }
+        get(c, "transition", p.comp.transition); get(c, "transitionTime", p.comp.transitionTime);
+        p.comp.transition = std::clamp(p.comp.transition, 0, 1);
+        p.comp.transitionTime = std::clamp(p.comp.transitionTime, 0.f, 30.f);
+        for (auto& qj : c.value("cues", json::array())) {
+            Cue q; get(qj, "number", q.number); get(qj, "name", q.name); get(qj, "stack", q.stack); get(qj, "column", q.column);
+            p.comp.cues.push_back(q);
+        }
         p.comp.activeStack = std::clamp(act, 0, (int)p.comp.stacks.size() - 1);
         for (auto& sj : j.value("screens", json::array())) {
             Screen s;

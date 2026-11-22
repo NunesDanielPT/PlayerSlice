@@ -31,6 +31,7 @@ static void buildDefaultLayout(ImGuiID dock) {
     ImGui::DockBuilderDockWindow("###log", bl2);
     ImGui::DockBuilderDockWindow("###cliptime", bl2);
     ImGui::DockBuilderDockWindow("###timecode", bl2);
+    ImGui::DockBuilderDockWindow("###cues", bl2);
     ImGui::DockBuilderDockWindow("###props_clip", rightTop);
     ImGui::DockBuilderDockWindow("###props_col", rightTop);
     ImGui::DockBuilderDockWindow("###props_layer", rightBottom);
@@ -653,6 +654,7 @@ void drawUI(App& app) {
     drawProperties(app);
     drawClipTime(app);
     drawTimecodePanel(app);
+    drawCuesPanel(app);
     logWindow(app);
     statusBar(app);
     compSettingsPopup(app);

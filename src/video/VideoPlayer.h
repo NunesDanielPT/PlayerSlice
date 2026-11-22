@@ -36,7 +36,8 @@ class VideoPlayer {
 public:
     enum class State { Opening, Playing, Ended, Error };
 
-    VideoPlayer(const std::string& pathUtf8, LoopMode loop, float speed);
+    // trimIn/trimOut em segundos do ficheiro (trimOut <= 0 = até ao fim)
+    VideoPlayer(const std::string& pathUtf8, LoopMode loop, float speed, double trimIn = 0, double trimOut = 0);
     ~VideoPlayer();
     VideoPlayer(const VideoPlayer&) = delete;
     VideoPlayer& operator=(const VideoPlayer&) = delete;
@@ -47,6 +48,14 @@ public:
     // modo escravo (timecode): o tempo do clip vem de fora; chamar antes de update() em cada frame.
     // t não é "dobrado" pelo loop (cresce sempre); o player trata do loop sem cortes.
     void chase(double t);
+    void stopChase() { m_chase = false; m_started = false; }
+    // transporte (timeline do clip)
+    void setPaused(bool p);
+    bool paused() const { return m_paused; }
+    void seek(double t);                  // t em segundos desde o Trim In
+    void setTrim(double in, double out);  // aplica no próximo loop (ou já, com seek)
+    double trimIn() const { return m_in.load(); }
+    double trimLength() const;            // duração entre Trim In e Trim Out
     bool chasing() const { return m_chase; }
     void setSpeed(float s);
     void setLoop(LoopMode m) { m_loop.store(m); }
@@ -102,6 +111,7 @@ private:
     std::atomic<bool> m_restartReq{false};
     std::atomic<bool> m_seekReq{false};
     std::atomic<double> m_seekT{0};
+    std::atomic<double> m_in{0}, m_out{0};
     std::atomic<int> m_gen{0};
     std::atomic<State> m_state{State::Opening};
     std::atomic<LoopMode> m_loop;
@@ -121,6 +131,7 @@ private:
     // render thread
     bool   m_started = false;
     bool   m_chase = false;
+    bool   m_paused = false;
     double m_chaseT = 0;
     double m_seekSentT = -1;     // último salto pedido (render thread)
     double m_seekSentAt = 0;

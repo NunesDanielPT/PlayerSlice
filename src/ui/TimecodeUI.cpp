@@ -250,6 +250,26 @@ void drawTimecodePanel(App& app) {
     ImGui::End();
 }
 
+// --------------------------------------------------------------------------- Coluna → Timecode
+void columnTimecodeControls(App& app, Column& col) {
+    TcStatus st = Timecode::get().status();
+    float fps = st.fps > 0 ? st.fps : 25;
+    if (ImGui::Checkbox(T("Disparar a coluna por timecode"), &col.tcTrigger)) { app.checkpoint(); app.markDirty(); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Quando o timecode chega à hora marcada, a coluna inteira vai para o ar (como clicar no cabeçalho)."));
+    if (!col.tcTrigger) return;
+    double start = col.tcStart;
+    if (tcField(T("Hora"), start, fps, 130)) { app.checkpoint(); col.tcStart = start; app.markDirty(); }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!st.valid);
+    if (ImGui::SmallButton(T("Agora##col"))) { app.checkpoint(); col.tcStart = std::floor(st.seconds * std::lround(fps)) / std::lround(fps); app.markDirty(); }
+    ImGui::EndDisabled();
+    if (st.valid) {
+        double rel = col.tcStart - st.seconds;
+        if (rel > 0) ImGui::TextDisabled(T("Dispara daqui a %s"), tcFormat(rel, fps).c_str());
+    }
+    ImGui::TextDisabled("%s", T("Só na stack visível."));
+}
+
 // --------------------------------------------------------------------------- Clip → Timecode
 void clipTimecodeControls(App& app, Clip& c) {
     TcStatus st = Timecode::get().status();

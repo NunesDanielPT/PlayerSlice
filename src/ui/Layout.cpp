@@ -30,7 +30,7 @@ static json uiStateJson(App& app) {
     json j;
     j["panels"] = {{"clips", pn.clips}, {"monitors", pn.monitors}, {"outputs", pn.outputs}, {"log", pn.log}, {"effects", pn.effects},
                    {"propComp", pn.propComp}, {"propLayer", pn.propLayer}, {"propColumn", pn.propColumn}, {"propClip", pn.propClip},
-                   {"clipTime", pn.clipTime}, {"timecode", pn.timecode}};
+                   {"clipTime", pn.clipTime}, {"timecode", pn.timecode}, {"cues", pn.cues}};
     j["clipTime"] = {{"system", app.ui.ctSystem}, {"selClip", app.ui.ctSelClip}, {"selLayer", app.ui.ctSelLayer},
                      {"hidden", std::vector<uint32_t>(app.ui.ctHiddenLayers.begin(), app.ui.ctHiddenLayers.end())}};
     j["monitors"] = json::array();
@@ -51,6 +51,7 @@ static void applyUiState(App& app, const json& j) {
         pn.propColumn = p.value("propColumn", true); pn.propClip = p.value("propClip", true);
         pn.clipTime = p.value("clipTime", true);
         pn.timecode = p.value("timecode", false);
+        pn.cues = p.value("cues", false);
     }
     if (j.contains("clipTime")) {
         auto& c = j["clipTime"];
@@ -121,6 +122,7 @@ void drawLayoutMenu(App& app) {
         ImGui::MenuItem(T("Efeitos"), nullptr, &pn.effects);
         ImGui::MenuItem(T("Clip Time"), nullptr, &pn.clipTime);
         ImGui::MenuItem(T("Timecode"), nullptr, &pn.timecode);
+        ImGui::MenuItem(T("Cues"), nullptr, &pn.cues);
         ImGui::MenuItem(T("Registo"), nullptr, &pn.log);
         ImGui::SeparatorText(T("Propriedades"));
         ImGui::MenuItem(T("Composição"), nullptr, &pn.propComp);

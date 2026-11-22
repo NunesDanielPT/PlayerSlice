@@ -166,10 +166,12 @@ void drawClipTime(App& app) {
     ImGui::SetCursorPos(start);
 
     auto items = gather(app, false);
-    const float itemW = 300, big = 40.f;
-    float x0 = ImGui::GetCursorScreenPos().x, xMax = x0 + avail.x - 80;
+    // painel estreito → letra mais pequena; painel largo → nunca maior do que o tamanho normal
+    const float k = std::clamp((avail.x - 24.f) / 300.f, 0.3f, 1.f);
+    const float itemW = 300 * k, big = 40.f * k;
+    float x0 = ImGui::GetCursorScreenPos().x, xMax = x0 + avail.x - (k < 1 ? 4 : 80);
     ImVec2 cur = ImGui::GetCursorScreenPos();
-    cur.y += 4;
+    cur.y += k < 1 ? ImGui::GetFrameHeight() + 2 : 4;   // estreito: não ficar por baixo do botão Opções
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float rowH = 0;
     for (auto& it : items) {
@@ -178,9 +180,9 @@ void drawClipTime(App& app) {
                             : IM_COL32(230, 232, 235, 255);
         // etiqueta (cortada à largura)
         dl->PushClipRect(cur, ImVec2(cur.x + itemW - 16, cur.y + 400), true);
-        dl->AddText(cur, it.live ? col : IM_COL32(200, 202, 206, 255), it.label.c_str());
+        dl->AddText(nullptr, ImGui::GetFontSize() * std::max(0.75f, k), cur, it.live ? col : IM_COL32(200, 202, 206, 255), it.label.c_str());
         dl->PopClipRect();
-        float ly = ImGui::GetTextLineHeight() + 2;
+        float ly = ImGui::GetTextLineHeight() * std::max(0.75f, k) + 2;
         ImFont* f = ImGui::GetFont();
         dl->AddText(f, big, ImVec2(cur.x, cur.y + ly), col, it.time.c_str());
         ImVec2 ts = f->CalcTextSizeA(big, FLT_MAX, 0, it.time.c_str());
@@ -190,7 +192,7 @@ void drawClipTime(App& app) {
             dl->AddLine(ImVec2(cur.x, by), ImVec2(cur.x + ts.x * std::clamp(it.progress, 0.f, 1.f), by), col, 2);
         }
         rowH = std::max(rowH, by - cur.y + 4);
-        cur.x += itemW + 20;
+        cur.x += itemW + 20 * k;
     }
     ImGui::Dummy(ImVec2(avail.x, cur.y + rowH - ImGui::GetCursorScreenPos().y + 10));
     ImGui::End();

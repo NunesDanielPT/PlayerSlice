@@ -48,6 +48,8 @@ struct UIState {
     bool     layoutBuilt = false;
     // seleção múltipla de clips (id da layer, coluna) + âncora para Shift+clique
     std::set<std::pair<uint32_t, int>> selCells;
+    bool     hasClipSettings = false; // definições copiadas de um clip (loop, velocidade, transformar, efeitos...)
+    Clip     clipSettings;
     int      anchorLayer = -1, anchorCol = -1;
     int      selColumnProp = 0;               // coluna mostrada nas propriedades
     struct ClipCopy { int dl, dc; Clip clip; };
@@ -62,6 +64,7 @@ struct UIState {
         bool propComp = true, propLayer = true, propColumn = true, propClip = true;
         bool clipTime = true;
         bool timecode = false;
+        bool cues = false;
     } panel;
     // Clip Time: o que mostrar
     bool ctSystem = true, ctSelClip = true, ctSelLayer = true;
@@ -102,6 +105,12 @@ public:
     void applyTimecode();          // Settings → módulo Timecode
     void timecodeTriggers();       // disparar clips à hora marcada
     void toggleTestPattern();      // todas as saídas
+    // cues (controlo por outros programas: OSC /playerslice/cue/...)
+    int  cueIndex = -1;            // último cue disparado
+    void fireCue(int index);
+    void cueGo();                  // seguinte
+    void cueBack();                // anterior
+    int  findCue(const std::string& number) const;
     bool anyTestPattern() const;     // saídas no ar → frequência do monitor = fps do projeto
     std::map<std::string, float> m_hzApplied;   // monitor → fps já aplicado       // muda a stack visível (os clips no ar continuam)
     void newStack(bool duplicate);

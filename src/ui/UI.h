@@ -21,8 +21,12 @@ void compositionSettingsBody(App& app, bool popup);
 void drawLayoutMenu(App& app);
 void drawClipTime(App& app);
 void drawTimecodePanel(App& app);
+void drawCuesPanel(App& app);
 void sectionTimecode(App& app);
 void clipTimecodeControls(App& app, struct Clip& c);
+void copyClipSettings(App& app, const struct Clip& c);
+int  pasteClipSettings(App& app);     // cola nos clips selecionados; devolve quantos
+void columnTimecodeControls(App& app, struct Column& col);
 std::string clipTimeJson(App& app);
 void applyPendingLayout(App& app);
 void saveUiState(App& app);

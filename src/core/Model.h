@@ -50,12 +50,24 @@ struct Clip {
     std::vector<Effect> effects;
     TcMode      tcMode = TcMode::Off;
     double      tcStart = 0;       // segundos de timecode em que o clip começa
+    double      trimIn = 0;        // segundos do ficheiro (Trim In)
+    double      trimOut = 0;       // 0 = até ao fim
     bool empty() const { return path.empty(); }
 };
 
 struct Column {
     std::string name;
     uint32_t    color = 0;          // 0 = sem cor
+    bool        tcTrigger = false;  // dispara a coluna inteira quando o timecode chega a tcStart
+    double      tcStart = 0;
+};
+
+// Cue: número/nome → coluna de uma stack (para controlo por outros programas)
+struct Cue {
+    std::string number;             // "1", "2.5", "A"...
+    std::string name;
+    int         stack = 0;
+    int         column = 0;
 };
 
 struct Layer {
@@ -100,6 +112,10 @@ struct Composition {
     std::vector<Layer> layers;      // índice 0 = layer do topo (desenhada por último)
     std::vector<Stack> stacks{Stack{"Stack 1"}};
     int activeStack = 0;
+    // transição entre clips (crossfader da composição); a layer pode ter o seu próprio fade
+    int   transition = 0;           // 0 corte, 1 dissolve
+    float transitionTime = 0.5f;    // segundos
+    std::vector<Cue> cues;
 };
 
 struct Slice {

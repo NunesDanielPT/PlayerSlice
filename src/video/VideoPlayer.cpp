@@ -122,8 +122,10 @@ static std::string codecName(AVCodecID id, const char* fallback) {
 VideoPlayer::Frame::~Frame() { if (hw) av_frame_free(&hw); }
 
 
-VideoPlayer::VideoPlayer(const std::string& pathUtf8, LoopMode loop, float speed)
+VideoPlayer::VideoPlayer(const std::string& pathUtf8, LoopMode loop, float speed, double trimIn, double trimOut)
     : m_path(pathUtf8), m_loop(loop), m_speed(speed) {
+    m_in = std::max(0.0, trimIn);
+    m_out = trimOut > 0 ? std::max(trimOut, m_in.load() + 0.04) : 0.0;
     m_maxQueue = (size_t)std::clamp(settings().decodeBuffer, 3, 16);
     m_thread = std::thread([this] { threadMain(); });
 }
@@ -181,10 +183,43 @@ void VideoPlayer::setSpeed(float s) {
     // rebase do relógio para não saltar
     if (m_started) {
         double now = nowSeconds();
-        m_clockT = m_clockT + (now - m_clockBase) * m_speed.load();
+        m_clockT = m_clockT + (now - m_clockBase) * (m_paused ? 0.0 : m_speed.load());
         m_clockBase = now;
     }
     m_speed = std::clamp(s, 0.0f, 8.0f);
+}
+
+void VideoPlayer::setPaused(bool p) {
+    if (p == m_paused) return;
+    if (m_started) {
+        double now = nowSeconds();
+        m_clockT = m_clockT + (now - m_clockBase) * (m_paused ? 0.0 : m_speed.load());
+        m_clockBase = now;
+    }
+    m_paused = p;
+}
+
+void VideoPlayer::seek(double t) {
+    m_seekT = std::max(0.0, t);
+    m_gen++;
+    m_seekReq = true;
+    m_started = false;          // o relógio recomeça no primeiro frame depois do salto
+    m_cv.notify_all();
+}
+
+void VideoPlayer::setTrim(double in, double out) {
+    in = std::max(0.0, in);
+    out = out > 0 ? std::max(out, in + 0.04) : 0.0;
+    if (std::fabs(in - m_in.load()) < 1e-6 && std::fabs(out - m_out.load()) < 1e-6) return;
+    m_in = in; m_out = out;
+}
+
+double VideoPlayer::trimLength() const {
+    double d;
+    { std::lock_guard<std::mutex> lk(m_mtx); d = m_info.duration; }
+    double out = m_out.load();
+    double end = out > 0 ? (d > 0 ? std::min(out, d) : out) : d;
+    return std::max(0.0, end - m_in.load());
 }
 
 std::unique_ptr<VideoPlayer::Frame> VideoPlayer::takeFree() {
@@ -329,9 +364,14 @@ bool VideoPlayer::openAndRun() {
     const YuvMatrix yuv709 = makeYuvMatrix(true, false), yuv601 = makeYuvMatrix(false, false);
     const YuvMatrix yuv709f = makeYuvMatrix(true, true), yuv601f = makeYuvMatrix(false, true);
 
+    bool hitOut = false;           // passou o Trim Out → tratar como fim do ficheiro
     auto relTime = [&](int64_t pts) -> double {
         if (pts == AV_NOPTS_VALUE) return lastT + frameDur - loopOffset;
-        return (pts - startPts) * av_q2d(tb);
+        return (pts - startPts) * av_q2d(tb) - m_in.load();   // relativo ao Trim In
+    };
+    auto pastOut = [&](double rel) {
+        double out = m_out.load();
+        return out > 0 && rel + m_in.load() >= out - frameDur * 0.25;
     };
 
     auto clearQueue = [&] {
@@ -341,12 +381,16 @@ bool VideoPlayer::openAndRun() {
     };
 
     auto seekStart = [&] {
-        av_seek_frame(g.fmt, vs, startPts, AVSEEK_FLAG_BACKWARD);
+        double in = m_in.load();
+        av_seek_frame(g.fmt, vs, startPts + (int64_t)(in / av_q2d(tb)), AVSEEK_FLAG_BACKWARD);
         if (g.dec) avcodec_flush_buffers(g.dec);
+        hitOut = false;
     };
 
     auto emitDecoded = [&](AVFrame* fr) {
         double rel = relTime(fr->best_effort_timestamp);
+        if (rel < -frameDur * 0.5) return;                 // antes do Trim In (depois de um salto)
+        if (pastOut(rel)) { hitOut = true; return; }
         double t = rel + loopOffset;
         maxRelT = std::max(maxRelT, rel);
         lastT = t;
@@ -424,9 +468,12 @@ bool VideoPlayer::openAndRun() {
             gen = m_gen.load();
             double t = std::max(0.0, m_seekT.load());
             double base = 0;
-            if (loopLen > 0 && m_loop.load() == LoopMode::Loop) base = std::floor(t / loopLen) * loopLen;
-            else if (loopLen > 0) t = std::min(t, std::max(0.0, loopLen - frameDur));
-            int64_t ts = startPts + (int64_t)((t - base) / av_q2d(tb));
+            double in = m_in.load(), out = m_out.load();
+            double len = loopLen > 0 ? (out > 0 ? std::min(out, loopLen) : loopLen) - in : (out > 0 ? out - in : 0);
+            if (len > 0 && m_loop.load() == LoopMode::Loop) base = std::floor(t / len) * len;
+            else if (len > 0) t = std::min(t, std::max(0.0, len - frameDur));
+            int64_t ts = startPts + (int64_t)((in + t - base) / av_q2d(tb));
+            hitOut = false;
             av_seek_frame(g.fmt, vs, ts, AVSEEK_FLAG_BACKWARD);
             if (g.dec) avcodec_flush_buffers(g.dec);
             clearQueue();
@@ -445,8 +492,9 @@ bool VideoPlayer::openAndRun() {
             }
         }
 
-        r = av_read_frame(g.fmt, g.pkt);
+        r = hitOut ? AVERROR_EOF : av_read_frame(g.fmt, g.pkt);
         if (r == AVERROR_EOF || (r < 0 && avio_feof(g.fmt->pb))) {
+            hitOut = false;
             if (g.dec) {
                 avcodec_send_packet(g.dec, nullptr);
                 drainDecoder();
@@ -470,6 +518,8 @@ bool VideoPlayer::openAndRun() {
 
         if (isHap) {
             double rel = relTime(g.pkt->pts != AV_NOPTS_VALUE ? g.pkt->pts : g.pkt->dts);
+            if (rel < -frameDur * 0.5) { av_packet_unref(g.pkt); continue; }
+            if (pastOut(rel)) { hitOut = true; av_packet_unref(g.pkt); continue; }
             double t = rel + loopOffset;
             maxRelT = std::max(maxRelT, rel);
             lastT = t;
@@ -546,7 +596,8 @@ void VideoPlayer::update(double now) {
         if (m_chase) {
             // modo escravo: o playhead é o tempo pedido (timecode)
             double target = m_chaseT;
-            const double dur = m_info.duration;
+            double dur = m_info.duration;
+            { double out = m_out.load(); if (out > 0) dur = dur > 0 ? std::min(dur, out) : out; dur -= m_in.load(); }
             if (target < 0) target = 0;
             if (dur > 0 && m_loop.load() != LoopMode::Loop) target = std::min(target, std::max(0.0, dur - fd));
             double lo = m_hasFrame ? m_shownT : -1, hi = lo;
@@ -579,7 +630,7 @@ void VideoPlayer::update(double now) {
             m_clockT = m_queue.front()->t;
         }
         double speed = m_speed.load();
-        double playhead = m_clockT + (now - m_clockBase) * speed;
+        double playhead = m_clockT + (now - m_clockBase) * (m_paused ? 0.0 : speed);
         // tolerância de meio frame para evitar "jitter" com relógios quase iguais
         double tol = 0.5 * fd;
         while (!m_queue.empty() && m_queue.front()->t <= playhead + tol) {

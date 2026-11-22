@@ -40,6 +40,7 @@ static const char* kActionNames[] = {
     "Disparar coluna 1", "Disparar coluna 2", "Disparar coluna 3", "Disparar coluna 4", "Disparar coluna 5",
     "Disparar coluna 6", "Disparar coluna 7", "Disparar coluna 8", "Disparar coluna 9",
     "Stack anterior", "Stack seguinte", "Nova stack",
+    "Cue seguinte (GO)", "Cue anterior",
 };
 static_assert(sizeof(kActionNames) / sizeof(kActionNames[0]) == (int)Action::Count, "nomes das ações");
 
@@ -49,6 +50,7 @@ static const char* kActionIds[] = {
     "undo", "redo", "settings", "outputEditor", "takePreview", "clearPreview",
     "column1", "column2", "column3", "column4", "column5", "column6", "column7", "column8", "column9",
     "prevStack", "nextStack", "newStack",
+    "cueGo", "cueBack",
 };
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == (int)Action::Count, "ids das ações");
 

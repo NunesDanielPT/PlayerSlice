@@ -46,11 +46,11 @@ void Compositor::trigger(Project& p, int li, int column) {
     if (rt.prev) VideoPlayer::destroyAsync(std::move(rt.prev));
     rt.prev = std::move(rt.cur);
     rt.prevClip = rt.curClip;
-    rt.cur = std::make_unique<VideoPlayer>(c.path, c.loop, c.speed);
+    rt.cur = std::make_unique<VideoPlayer>(c.path, c.loop, c.speed, c.trimIn, c.trimOut);
     rt.curClip = c;
     rt.column = column;
     rt.stack = p.comp.activeStack;
-    rt.fadeDur = l.fadeTime;
+    rt.fadeDur = l.fadeTime > 0 ? l.fadeTime : (p.comp.transition == 1 ? p.comp.transitionTime : 0.f);
     rt.fadeStart = -1; // começa quando o novo clip tiver o 1º frame
     l.activeColumn = column;
 }
@@ -62,7 +62,7 @@ void Compositor::previewClip(Project& p, int li, int column) {
     const Clip& c = l.clips[column];
     if (m_prev && m_prevLayerId == l.id && m_prevCol == column && m_prevStack == p.comp.activeStack && m_prevClip.path == c.path) { m_prev->restart(); return; }
     VideoPlayer::destroyAsync(std::move(m_prev));
-    m_prev = std::make_unique<VideoPlayer>(c.path, c.loop == LoopMode::PlayOnceClear ? LoopMode::PlayOnceHold : c.loop, c.speed);
+    m_prev = std::make_unique<VideoPlayer>(c.path, c.loop == LoopMode::PlayOnceClear ? LoopMode::PlayOnceHold : c.loop, c.speed, c.trimIn, c.trimOut);
     m_prevClip = c;
     m_prevLayerId = l.id;
     m_prevCol = column;
@@ -90,7 +90,7 @@ void Compositor::takePreview(Project& p) {
     rt.curClip = m_prevClip;
     rt.column = m_prevCol;
     rt.stack = m_prevStack;
-    rt.fadeDur = l.fadeTime;
+    rt.fadeDur = l.fadeTime > 0 ? l.fadeTime : (p.comp.transition == 1 ? p.comp.transitionTime : 0.f);
     rt.fadeStart = -1;
     l.activeColumn = m_prevStack == p.comp.activeStack ? m_prevCol : -1;
     m_prevLayerId = 0;
@@ -107,7 +107,21 @@ void Compositor::triggerColumn(Project& p, int column) {
         Layer& l = p.comp.layers[i];
         if (l.ignoreColumn) continue;
         if (column < (int)l.clips.size() && !l.clips[column].empty()) trigger(p, i, column);
-        else stopLayer(p, i);
+        else {
+            // célula vazia: com dissolve, a layer desvanece para nada em vez de cortar
+            float fd = l.fadeTime > 0 ? l.fadeTime : (p.comp.transition == 1 ? p.comp.transitionTime : 0.f);
+            auto it = m_layers.find(l.id);
+            if (fd > 0 && it != m_layers.end() && it->second.cur) {
+                LayerRuntime& rt = it->second;
+                if (rt.prev) VideoPlayer::destroyAsync(std::move(rt.prev));
+                rt.prev = std::move(rt.cur);
+                rt.prevClip = rt.curClip;
+                rt.column = -1;
+                rt.fadeDur = fd;
+                rt.fadeStart = nowSeconds();
+                l.activeColumn = -1; l.playing = false;
+            } else stopLayer(p, i);
+        }
     }
 }
 
@@ -176,6 +190,7 @@ void Compositor::update(Project& p, double now) {
                 p.comp.layers[li].clips[m_prevCol].path == m_prevClip.path) {
                 const Clip& c = p.comp.layers[li].clips[m_prevCol];
                 if (c.speed != m_prevClip.speed) m_prev->setSpeed(c.speed);
+                if (c.trimIn != m_prevClip.trimIn || c.trimOut != m_prevClip.trimOut) m_prev->setTrim(c.trimIn, c.trimOut);
                 m_prevClip = c;
             }
             if (tcFollows(m_prevClip.tcMode)) { TcStatus ts = Timecode::get().status(); if (ts.valid) m_prev->chase((ts.seconds - m_prevClip.tcStart) * m_prevClip.speed); }
@@ -192,6 +207,7 @@ void Compositor::update(Project& p, double now) {
             const Clip& c = l.clips[rt.column];
             if (c.speed != rt.curClip.speed && rt.cur) rt.cur->setSpeed(c.speed);
             if (c.loop != rt.curClip.loop && rt.cur) rt.cur->setLoop(c.loop);
+            if ((c.trimIn != rt.curClip.trimIn || c.trimOut != rt.curClip.trimOut) && rt.cur) rt.cur->setTrim(c.trimIn, c.trimOut);
             rt.curClip = c;
         }
         if (rt.cur && tcFollows(rt.curClip.tcMode)) {
@@ -304,7 +320,9 @@ void Compositor::drawLayer(const Project& p, const Layer& l, LayerRuntime& rt, d
     float k = 1.f;
     if (rt.prev && rt.fadeStart >= 0 && rt.fadeDur > 0) k = std::clamp(float((now - rt.fadeStart) / rt.fadeDur), 0.f, 1.f);
     else if (rt.prev && rt.fadeStart < 0) k = 0.f;
-    if (rt.prev) drawClip(p, l, rt.prevClip, *rt.prev, l.opacity * rt.prevClip.opacity);
+    // sem clip novo (desvanecer para nada): o anterior vai desaparecendo
+    float kp = (!rt.cur && rt.prev) ? 1.f - k : 1.f;
+    if (rt.prev && kp > 0) drawClip(p, l, rt.prevClip, *rt.prev, l.opacity * rt.prevClip.opacity * kp);
     if (rt.cur && k > 0) drawClip(p, l, rt.curClip, *rt.cur, l.opacity * rt.curClip.opacity * k);
 }
 
