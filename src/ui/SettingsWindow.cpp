@@ -126,8 +126,8 @@ void sectionHowTo() {
     struct Step { const char* title; const char* text; };
     const Step steps[] = {
         {"1. Composição", "Define em Vídeo a resolução da composição: uma tela grande onde cabem todos os conteúdos (ex.: 7680x2160)."},
-        {"2. Ecrãs", "Em \"Saídas e Slices\" cria um ecrã por cada saída da placa gráfica (ou processador LED) e escolhe a saída na lista."},
-        {"3. Slices", "Cria uma slice por ledwall. No separador Entrada escolhes a zona da composição; no separador Saída escolhes onde aparece no ecrã. Arrasta, redimensiona pelos cantos e roda pelo círculo turquesa."},
+        {"2. Ecrãs", "Em Saídas → Saída avançada (Ctrl+E) cria um ecrã por cada saída da placa gráfica (ou processador LED) e escolhe o dispositivo à direita."},
+        {"3. Slices", "Cria uma slice por ledwall. Em Input Selection escolhes a zona da composição; em Output Transformation escolhes onde aparece na saída. Arrasta, redimensiona pelos cantos e roda pelo círculo turquesa. Em \"Editar pontos\" arrastas cada canto para encaixar em paredes com perspetiva."},
         {"4. Layers dedicadas", "Usa \"Criar layer dedicada a esta slice\": os vídeos dessa layer encaixam automaticamente no ledwall certo."},
         {"5. Vídeos", "Arrasta os vídeos do Explorador para as células da grelha (ou duplo clique numa célula vazia)."},
         {"6. Preview e Programa", "Clica na metade de baixo de um clip para o ver em Preview; na metade de cima vai para o Programa (no ar). Enter envia o preview para o ar. O cabeçalho de uma coluna põe a coluna inteira no ar."},
@@ -151,6 +151,14 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.3.0", {
+            "Saída avançada numa janela própria, como no Resolume: lista de ecrãs e slices, caixa de ajuda, Cancelar e Gravar e fechar.",
+            "Editar pontos: arrasta os 4 cantos de cada slice com perspetiva real, na entrada e na saída, para encaixar em paredes e arestas.",
+            "Transformar slices com perspetiva: mover, redimensionar e rodar mantendo a forma.",
+            "Ecrã: opacidade, brilho, contraste e correção de vermelho, verde e azul.",
+            "Output Guide: imagem do palco por baixo das slices para as alinhar.",
+            "Verificação automática dos shaders no build.",
+        }},
         {"0.2.2", {
             "Correção: clicar num clip podia disparar o clip de outra layer na mesma coluna.",
         }},

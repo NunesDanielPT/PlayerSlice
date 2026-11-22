@@ -32,6 +32,9 @@ struct UIState {
     bool     showCompSettings = false;
     bool     showLog = false;
     bool     focusEditor = false;
+    bool     showAdvOutput = false;   // janela "Saída avançada"
+    bool     editPoints = false;      // editor: modo Editar pontos
+    bool     handTool = false;        // editor: ferramenta mão
     bool     layoutBuilt = false;
     struct CellRect { int layer, column; float x0, y0, x1, y1; };
     std::vector<CellRect> cells;     // para largar ficheiros do Explorador

@@ -24,7 +24,6 @@ static void buildDefaultLayout(ImGuiID dock) {
     ImGuiID bl1, bl2;
     ImGui::DockBuilderSplitNode(bottomLeft, ImGuiDir_Left, 0.5f, &bl1, &bl2);
     ImGui::DockBuilderDockWindow("###clips", left);
-    ImGui::DockBuilderDockWindow("###slices", left);
     ImGui::DockBuilderDockWindow("###comp", bl1);
     ImGui::DockBuilderDockWindow("###monitor", bl2);
     ImGui::DockBuilderDockWindow("###log", bl2);
@@ -176,7 +175,7 @@ static void outputsMonitor(App& app) {
     ImGui::SameLine();
     if (ImGui::Button(T("Desligar todas"))) app.setAllOutputs(false);
     ImGui::Separator();
-    if (p.screens.empty()) ImGui::TextDisabled("%s", T("Sem ecrãs. Cria um em \"Saídas e Slices\"."));
+    if (p.screens.empty()) ImGui::TextDisabled("%s", T("Sem ecrãs. Cria um em Saídas → Saída avançada."));
     float availW = ImGui::GetContentRegionAvail().x;
     int n = std::max(1, (int)p.screens.size());
     int cols = std::clamp((int)(availW / 230), 1, n);
@@ -429,7 +428,7 @@ void drawUI(App& app) {
             if (ImGui::MenuItem(T("Ligar todas as saídas"), menuKey(Action::OutputsOn).c_str())) app.setAllOutputs(true);
             if (ImGui::MenuItem(T("Desligar todas as saídas"), menuKey(Action::OutputsOff).c_str())) app.setAllOutputs(false);
             ImGui::Separator();
-            if (ImGui::MenuItem(T("Editor de saídas e slices"), menuKey(Action::OutputEditor).c_str())) app.ui.focusEditor = true;
+            if (ImGui::MenuItem(T("Saída avançada..."), menuKey(Action::OutputEditor).c_str())) app.ui.focusEditor = true;
             if (ImGui::MenuItem(T("Resolução da composição..."))) app.ui.showCompSettings = true;
             if (ImGui::MenuItem(T("Detetar monitores de novo"))) app.refreshDisplays();
             ImGui::Separator();
@@ -479,7 +478,7 @@ void drawUI(App& app) {
     // proteção: logo após o arranque, se alguma janela principal não estiver encaixada
     // (disposição antiga ou corrompida), repor a disposição de origem
     if (ImGui::GetFrameCount() == 3) {
-        const char* ids[] = {"###clips", "###slices", "###comp", "###monitor", "###props", "###log"};
+        const char* ids[] = {"###clips", "###comp", "###monitor", "###props", "###log"};
         for (const char* id : ids) {
             ImGuiWindow* w = ImGui::FindWindowByName(id);
             if (w && w->DockId == 0) { app.ui.layoutBuilt = false; PS_WARN("Disposição das janelas inválida — reposta"); break; }

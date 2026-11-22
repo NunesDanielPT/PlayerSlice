@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(PLAYERSLICE VERSION 0.2.2 LANGUAGES C CXX)
+project(PLAYERSLICE VERSION 0.3.0 LANGUAGES C CXX)
 
 # PLAYERSLICE — player de vídeo para ecrãs fora de formato (slices)
 # Criado por Daniel Nunes — github.com/NunesDanielPT
@@ -68,6 +68,7 @@ add_executable(PLAYERSLICE WIN32
   src/core/Updater.cpp
   src/gfx/Gfx.cpp
   src/gfx/Displays.cpp
+  src/gfx/ImageLoader.cpp
   src/video/VideoPlayer.cpp
   src/video/Thumbnail.cpp
   src/render/Compositor.cpp
@@ -99,7 +100,7 @@ endif()
 
 target_link_libraries(PLAYERSLICE PRIVATE
   imgui hap nlohmann_json::nlohmann_json
-  d3d11 dxgi d3dcompiler dbghelp shell32 winmm ole32 dwmapi shcore comdlg32 winhttp iphlpapi ws2_32 uuid)
+  d3d11 dxgi d3dcompiler dbghelp shell32 winmm ole32 dwmapi shcore comdlg32 windowscodecs winhttp iphlpapi ws2_32 uuid)
 
 # Copiar DLLs do FFmpeg para junto do .exe
 file(GLOB FFMPEG_DLLS "${FFMPEG_DIR}/bin/*.dll")
