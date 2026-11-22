@@ -288,6 +288,25 @@ void App::localizeDefaultNames() {
     for (auto& s : project.comp.stacks) fix(s.columns);
 }
 
+void App::matchOutputRefresh() {
+    if (!settings().matchOutputHz) return;
+    const float fps = project.comp.fps;
+    if (fps <= 0) return;                         // automático: não mexe nos monitores
+    static double lastTry = 0;
+    double now = nowSeconds();
+    if (now - lastTry < 0.5) return;              // no máximo 2 verificações/s
+    lastTry = now;
+    for (uint32_t id : liveScreens) {
+        const Screen* s = project.findScreen(id);
+        if (!s || s->device != ScreenDevice::Monitor || s->monitorKey.empty()) continue;
+        auto it = m_hzApplied.find(s->monitorKey);
+        if (it != m_hzApplied.end() && std::fabs(it->second - fps) < 0.001f) continue;
+        m_hzApplied[s->monitorKey] = fps;         // tenta uma vez por valor de fps (mantém-se ao desligar)
+        int hz = setDisplayRefresh(s->monitorKey, fps);
+        if (hz > 0) m_displaysChanged = true;
+    }
+}
+
 void App::selectStack(int i) {
     if (i < 0 || i >= (int)project.comp.stacks.size() || i == project.comp.activeStack) return;
     project.switchStack(i);
@@ -617,6 +636,7 @@ void App::frame() {
     }
     auto live = [this](uint32_t id) { return isLive(id); };
     outputs.sync(project, displays, live, settings().outputsOffBlack);
+    matchOutputRefresh();
     updateMouseLock(settings().lockMouseOutputs ? outputs.monitorRects() : std::vector<RECT>{}, m_hwnd);
 
     // com saídas no ar a interface pode ir a 30 fps: as saídas continuam ao ritmo do vsync

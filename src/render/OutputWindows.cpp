@@ -164,6 +164,16 @@ void OutputWindows::present(const Compositor& comp, const LiveFn& live, bool& di
     DWORD nowTick = GetTickCount();
     bool reassert = nowTick - lastTop > 1000;
     if (reassert) lastTop = nowTick;
+    if (m_wins.empty()) m_outFps = 0, m_lastPresent = 0;
+    else {
+        LARGE_INTEGER f, c; QueryPerformanceFrequency(&f); QueryPerformanceCounter(&c);
+        double t = (double)c.QuadPart / f.QuadPart;
+        if (m_lastPresent > 0) {
+            double dt = t - m_lastPresent;
+            if (dt > 0 && dt < 0.5) m_outFps = m_outFps <= 0 ? 1.0 / dt : m_outFps * 0.95 + (1.0 / dt) * 0.05;
+        }
+        m_lastPresent = t;
+    }
     for (auto& [id, w] : m_wins) {
         if (reassert && w.device == ScreenDevice::Monitor && w.hwnd)
             SetWindowPos(w.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);

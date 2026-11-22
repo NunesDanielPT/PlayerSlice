@@ -513,10 +513,20 @@ static void statusBar(App& app) {
     int playing = 0, dropped = 0;
     for (auto& l : app.project.comp.layers)
         if (VideoPlayer* v = app.comp.activePlayer(l.id)) { playing++; dropped += v->dropped(); }
-    ImVec4 fpsCol = app.fps >= 49 ? ImVec4(0.4f, 0.9f, 0.5f, 1) : app.fps >= 29 ? ImVec4(1, 0.75f, 0.3f, 1) : ImVec4(1, 0.4f, 0.4f, 1);
+    // fps das SAÍDAS (o que vai para os ecrãs), comparado com o do projeto; a interface fica em tooltip
     ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(fpsCol, "%.1f fps", app.fps);
-    ImGui::SameLine(); ImGui::TextDisabled("|  %.2f ms", app.frameMs);
+    const float target = app.project.comp.fps;
+    const double outFps = app.outputs.outputFps();
+    if (app.outputs.count() > 0 && outFps > 0) {
+        double ref = target > 0 ? target : outFps;
+        ImVec4 c = outFps >= ref * 0.97 ? ImVec4(0.4f, 0.9f, 0.5f, 1) : outFps >= ref * 0.85 ? ImVec4(1, 0.75f, 0.3f, 1) : ImVec4(1, 0.4f, 0.4f, 1);
+        if (target > 0) ImGui::TextColored(c, T("Saídas %.2f fps  (projeto %.3g)"), outFps, target);
+        else ImGui::TextColored(c, T("Saídas %.2f fps"), outFps);
+    } else {
+        if (target > 0) ImGui::TextColored(ImVec4(0.6f, 0.62f, 0.66f, 1), T("Projeto %.3g fps  ·  sem saídas abertas"), target);
+        else ImGui::TextColored(ImVec4(0.6f, 0.62f, 0.66f, 1), "%s", T("Projeto: fps automático  ·  sem saídas abertas"));
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Interface: %.0f fps (%.2f ms). O valor principal é o ritmo real a que as saídas recebem imagens."), app.fps, app.frameMs);
     ImGui::SameLine(); ImGui::TextDisabled(T("|  clips a tocar: %d"), playing);
     ImGui::SameLine(); ImGui::TextDisabled(T("|  frames descartados: %d"), dropped);
     ImGui::SameLine(); ImGui::TextDisabled(T("|  saídas no ar: %d"), (int)app.liveScreens.size());

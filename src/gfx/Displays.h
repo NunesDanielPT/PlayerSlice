@@ -21,5 +21,9 @@ struct DisplayInfo {
 };
 
 std::vector<DisplayInfo> enumerateDisplays();
+// Põe o monitor (\\.\DISPLAYn) à frequência mais próxima de fps (mesma resolução).
+// Fica gravado no Windows. Devolve a frequência final (0 = falhou / sem modo compatível).
+int setDisplayRefresh(const std::string& key, float fps, std::string* msg = nullptr);
+int currentRefresh(const std::string& key);
 
 } // namespace ps

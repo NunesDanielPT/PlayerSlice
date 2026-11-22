@@ -73,7 +73,6 @@ void Settings::resetKeys() {
     for (int i = 0; i < 9; ++i) keys[(int)Action::Column1 + i] = k(ImGuiKey_F1 + i);
     keys[(int)Action::PrevStack] = k(ImGuiKey_PageUp, true);
     keys[(int)Action::NextStack] = k(ImGuiKey_PageDown, true);
-    keys[(int)Action::NewStack]  = k(ImGuiKey_T, true);
 }
 
 std::string bindingLabel(const KeyBinding& k) {
@@ -123,6 +122,7 @@ bool Settings::load() {
         hwDecode = j.value("hwDecode", hwDecode);
         decodeBuffer = std::clamp(j.value("decodeBuffer", decodeBuffer), 3, 16);
         limitUiWhenLive = j.value("limitUiWhenLive", limitUiWhenLive);
+        matchOutputHz = j.value("matchOutputHz", matchOutputHz);
         oscIn = j.value("oscIn", oscIn); oscInPort = std::clamp(j.value("oscInPort", oscInPort), 1, 65535);
         oscOut = j.value("oscOut", oscOut); oscOutAddr = j.value("oscOutAddr", oscOutAddr);
         oscOutPort = std::clamp(j.value("oscOutPort", oscOutPort), 1, 65535);
@@ -137,6 +137,9 @@ bool Settings::load() {
                 b.shift = it->value("shift", false); b.alt = it->value("alt", false);
                 keys[i] = b;
             }
+            // a 0.5.0 trazia Ctrl+T para "Nova stack"; deixou de ter atalho por defeito
+            KeyBinding& ns = keys[(int)Action::NewStack];
+            if (ns.key == ImGuiKey_T && ns.ctrl && !ns.shift && !ns.alt) ns = KeyBinding{};
         }
     } catch (const std::exception& e) {
         PS_WARN("settings.json inválido (%s) — a usar predefinições", e.what());
@@ -150,7 +153,7 @@ bool Settings::save() const {
     j["audioDevice"] = audioDevice; j["audioName"] = audioName;
     j["outputsOffBlack"] = outputsOffBlack; j["startOutputsLive"] = startOutputsLive; j["lockMouseOutputs"] = lockMouseOutputs; j["checkUpdates"] = checkUpdates;
     j["priority"] = priority; j["preventSleep"] = preventSleep; j["hwDecode"] = hwDecode;
-    j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive;
+    j["decodeBuffer"] = decodeBuffer; j["limitUiWhenLive"] = limitUiWhenLive; j["matchOutputHz"] = matchOutputHz;
     j["oscIn"] = oscIn; j["oscInPort"] = oscInPort; j["oscOut"] = oscOut;
     j["oscOutAddr"] = oscOutAddr; j["oscOutPort"] = oscOutPort;
     j["webEnabled"] = webEnabled; j["webPort"] = webPort;

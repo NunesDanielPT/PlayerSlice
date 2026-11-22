@@ -46,6 +46,7 @@ struct Settings {
     bool        preventSleep = true;      // impedir suspensão / ecrãs a desligar
     bool        hwDecode = true;          // descodificação H.264/H.265 pela placa gráfica
     int         decodeBuffer = 6;         // frames em fila por clip (3..16)
+    bool        matchOutputHz = true;     // ao ligar uma saída, pôr o monitor à frequência dos fps do projeto
     bool        limitUiWhenLive = true;   // interface a 30 fps com saídas no ar (mais GPU para as saídas)
     // OSC (Companion, TouchOSC...)
     bool        oscIn = false;

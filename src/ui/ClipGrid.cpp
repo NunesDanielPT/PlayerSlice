@@ -681,7 +681,7 @@ static void stackTabs(App& app) {
         ImGui::SameLine();
     }
     if (ImGui::Button("+##newstack")) app.newStack(false);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Nova stack (Ctrl+T)"));
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Nova stack"));
     ImGui::PopStyleVar(2);
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragFrom = -1;
 
@@ -693,7 +693,7 @@ static void stackTabs(App& app) {
             ImGui::TextDisabled("%s", p.comp.stacks[i].name.c_str());
             ImGui::Separator();
             if (ImGui::MenuItem(T("Mudar o nome"))) { renameIdx = i; openRename = true; snprintf(nameBuf, sizeof(nameBuf), "%s", p.comp.stacks[i].name.c_str()); }
-            if (ImGui::MenuItem(T("Nova stack"), "Ctrl+T")) { app.selectStack(i); app.newStack(false); }
+            if (ImGui::MenuItem(T("Nova stack"))) { app.selectStack(i); app.newStack(false); }
             if (ImGui::MenuItem(T("Duplicar"))) { app.selectStack(i); app.newStack(true); }
             if (ImGui::MenuItem(T("Mover para a esquerda"), nullptr, false, i > 0)) { app.checkpoint(); p.moveStack(i, i - 1); app.dirty = true; }
             if (ImGui::MenuItem(T("Mover para a direita"), nullptr, false, i + 1 < (int)p.comp.stacks.size())) { app.checkpoint(); p.moveStack(i, i + 1); app.dirty = true; }

@@ -178,6 +178,10 @@ void sectionPerformance(App& app) {
     if (ImGui::SliderInt(T("Frames em memória por clip"), &s.decodeBuffer, 3, 16)) save();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Mais frames = mais tolerância a discos lentos, mas mais memória."));
     if (ImGui::Checkbox(T("Interface a 30 fps com saídas no ar (mais placa gráfica para as saídas)"), &s.limitUiWhenLive)) save();
+    if (ImGui::Checkbox(T("Ajustar a frequência dos monitores de saída aos fps do projeto"), &s.matchOutputHz)) save();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextWrapped("%s", T("Ao ligar uma saída, o monitor passa para a frequência do projeto (ex.: 50 fps → 50 Hz; 25 → 50 Hz). Fica assim depois de desligar, até mudares os fps do projeto."));
+    ImGui::PopStyleColor();
     ImGui::Spacing();
     ImGui::SeparatorText(T("Recomendações"));
     ImGui::BulletText("%s", T("Usa HAP ou HAP Q para vídeos grandes ou muitas layers ao mesmo tempo."));
@@ -237,6 +241,11 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.5.2", {
+            "Frequência das saídas: ao ligar uma saída, o monitor passa automaticamente para os fps do projeto (50 fps → 50 Hz, 25 → 50 Hz, 59.94 → 59 Hz) sem ir às definições do Windows. Fica assim ao desligar, até mudares os fps do projeto (Definições → Performance).",
+            "Barra de estado mostra os fps reais das SAÍDAS (e os do projeto), em vez dos fps da interface.",
+            "Nova stack deixou de ter atalho (Ctrl+T); continua disponível no + das abas e em Definições → Atalhos.",
+        }},
         {"0.5.1", {
             "Valores (posição, escala, opacidade...): o número fica sempre legível; arrasta para mudar, duplo clique para escrever o valor com o teclado, botão direito para repor o valor por defeito.",
             "Nomes automáticos das colunas acompanham o idioma (Coluna 1 / Column 1).",
@@ -246,7 +255,7 @@ void sectionWhatsNew() {
             "STACKS: o painel Clips passa a chamar-se Stack e podes criar várias (Stack 1, Stack 2...), cada uma com as suas colunas e clips. As layers são partilhadas.",
             "Mudar de stack não corta o que está no ar: os clips continuam a tocar até dispares outro.",
             "Abas das stacks: clique para mudar, duplo clique para mudar o nome, botão direito para duplicar, mover ou apagar.",
-            "Atalhos: Ctrl+PageUp / Ctrl+PageDown para mudar de stack, Ctrl+T para nova stack. OSC: /composition/decks/N/select.",
+            "Atalhos: Ctrl+PageUp / Ctrl+PageDown para mudar de stack. OSC: /composition/decks/N/select.",
             "Copiar clips (Ctrl+C) numa stack e colar (Ctrl+V) noutra.",
             "Monitores: divisória entre Preview e Programa para mudar o tamanho de cada um (duplo clique = metade).",
             "Transformar também no Programa: mexe no clip no ar da layer selecionada, em direto.",

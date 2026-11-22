@@ -4,6 +4,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <map>
+#include <cmath>
 
 using Microsoft::WRL::ComPtr;
 
@@ -73,6 +74,60 @@ std::vector<DisplayInfo> enumerateDisplays() {
         }
     }
     return list;
+}
+
+static std::wstring wkey(const std::string& k) { return std::wstring(k.begin(), k.end()); }
+
+int currentRefresh(const std::string& key) {
+    DEVMODEW dm{}; dm.dmSize = sizeof(dm);
+    std::wstring dev = wkey(key);
+    if (!EnumDisplaySettingsW(dev.c_str(), ENUM_CURRENT_SETTINGS, &dm)) return 0;
+    return (int)dm.dmDisplayFrequency;
+}
+
+int setDisplayRefresh(const std::string& key, float fps, std::string* msg) {
+    if (fps <= 1.f) return 0;
+    std::wstring dev = wkey(key);
+    DEVMODEW cur{}; cur.dmSize = sizeof(cur);
+    if (!EnumDisplaySettingsW(dev.c_str(), ENUM_CURRENT_SETTINGS, &cur)) return 0;
+    // 23.976 / 29.97 / 59.94 aparecem no Windows como 23 / 29 / 59
+    const bool ntsc = std::fabs(fps - std::round(fps)) > 0.01f;
+    const int base = ntsc ? (int)std::floor(fps) : (int)std::lround(fps);
+    // candidatos por ordem: exato, depois múltiplos (25 → 50 → 75 → 100, 24 → 48 ...)
+    std::vector<int> want;
+    for (int m = 1; m <= 5; ++m) {
+        int hz = base * m;
+        if (ntsc && m > 1) hz = (int)std::floor(fps * m);
+        if (hz > 0 && hz <= 500) want.push_back(hz);
+    }
+    if ((int)cur.dmDisplayFrequency == want[0]) return want[0];
+    std::vector<DEVMODEW> modes;
+    for (DWORD i = 0;; ++i) {
+        DEVMODEW m{}; m.dmSize = sizeof(m);
+        if (!EnumDisplaySettingsW(dev.c_str(), i, &m)) break;
+        if (m.dmPelsWidth != cur.dmPelsWidth || m.dmPelsHeight != cur.dmPelsHeight) continue;
+        if (m.dmDisplayFlags & DM_INTERLACED) continue;
+        modes.push_back(m);
+    }
+    for (int hz : want) {
+        if ((int)cur.dmDisplayFrequency == hz) return hz;   // já está num múltiplo compatível
+        for (auto& m : modes) {
+            if ((int)m.dmDisplayFrequency != hz) continue;
+            DEVMODEW set = cur;
+            set.dmDisplayFrequency = hz;
+            set.dmFields = DM_DISPLAYFREQUENCY;
+            LONG r = ChangeDisplaySettingsExW(dev.c_str(), &set, nullptr, CDS_UPDATEREGISTRY, nullptr);
+            if (r == DISP_CHANGE_SUCCESSFUL) {
+                PS_INFO("%s: %d Hz -> %d Hz (projeto %.3f fps)", key.c_str(), (int)cur.dmDisplayFrequency, hz, fps);
+                if (msg) *msg = std::to_string(hz) + " Hz";
+                return hz;
+            }
+            PS_WARN("%s: não foi possível mudar para %d Hz (código %ld)", key.c_str(), hz, r);
+        }
+    }
+    PS_WARN("%s: o monitor não tem um modo compatível com %.3f fps a %lux%lu (fica a %lu Hz)", key.c_str(), fps,
+            cur.dmPelsWidth, cur.dmPelsHeight, cur.dmDisplayFrequency);
+    return 0;
 }
 
 } // namespace ps

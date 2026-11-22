@@ -20,6 +20,7 @@ public:
     void present(const Compositor& comp, const LiveFn& live, bool& didVsync);
     void closeAll();
     int  count() const { return (int)m_wins.size(); }
+    double outputFps() const { return m_outFps; }   // ritmo real a que as saídas são apresentadas
     bool coversMonitor(HMONITOR m) const;
     std::vector<RECT> monitorRects() const;   // monitores ocupados por saídas em ecrã inteiro
 
@@ -42,6 +43,7 @@ private:
     bool resize(Win& w);
 
     std::map<uint32_t, Win> m_wins;   // por Screen::id
+    double m_outFps = 0, m_lastPresent = 0;
 };
 
 } // namespace ps

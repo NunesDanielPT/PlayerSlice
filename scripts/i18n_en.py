@@ -1,6 +1,17 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Frequência das saídas: ao ligar uma saída, o monitor passa automaticamente para os fps do projeto (50 fps → 50 Hz, 25 → 50 Hz, 59.94 → 59 Hz) sem ir às definições do Windows. Fica assim ao desligar, até mudares os fps do projeto (Definições → Performance).':'Output refresh rate: when an output goes live, the monitor automatically switches to the project fps (50 fps → 50 Hz, 25 → 50 Hz, 59.94 → 59 Hz) without going to Windows settings. It stays that way after turning off, until you change the project fps (Settings → Performance).',
+'Barra de estado mostra os fps reais das SAÍDAS (e os do projeto), em vez dos fps da interface.':"Status bar shows the real fps of the OUTPUTS (and the project's) instead of the interface fps.",
+'Nova stack deixou de ter atalho (Ctrl+T); continua disponível no + das abas e em Definições → Atalhos.':'New stack no longer has a shortcut (Ctrl+T); it is still available on the + next to the tabs and in Settings → Shortcuts.',
+'Atalhos: Ctrl+PageUp / Ctrl+PageDown para mudar de stack. OSC: /composition/decks/N/select.':'Shortcuts: Ctrl+PageUp / Ctrl+PageDown to switch stacks. OSC: /composition/decks/N/select.',
+'Saídas %.2f fps  (projeto %.3g)':'Outputs %.2f fps  (project %.3g)',
+'Saídas %.2f fps':'Outputs %.2f fps',
+'Projeto %.3g fps  ·  sem saídas abertas':'Project %.3g fps  ·  no outputs open',
+'Projeto: fps automático  ·  sem saídas abertas':'Project: automatic fps  ·  no outputs open',
+'Interface: %.0f fps (%.2f ms). O valor principal é o ritmo real a que as saídas recebem imagens.':'Interface: %.0f fps (%.2f ms). The main value is the real rate at which the outputs receive images.',
+'Ajustar a frequência dos monitores de saída aos fps do projeto':"Match the output monitors' refresh rate to the project fps",
+'Ao ligar uma saída, o monitor passa para a frequência do projeto (ex.: 50 fps → 50 Hz; 25 → 50 Hz). Fica assim depois de desligar, até mudares os fps do projeto.':'When an output goes live, the monitor switches to the project rate (e.g. 50 fps → 50 Hz; 25 → 50 Hz). It stays that way after turning off, until you change the project fps.',
 'Valores (posição, escala, opacidade...): o número fica sempre legível; arrasta para mudar, duplo clique para escrever o valor com o teclado, botão direito para repor o valor por defeito.':'Values (position, scale, opacity...): the number is always readable; drag to change, double-click to type the value, right-click to reset to default.',
 'Nomes automáticos das colunas acompanham o idioma (Coluna 1 / Column 1).':'Automatic column names follow the language (Coluna 1 / Column 1).',
 'Ajuda no Encaixe: Esticar, Caber e Preencher só diferem quando a proporção do vídeo é diferente da composição.':'Fit mode help: Stretch, Fit and Fill only differ when the video aspect ratio differs from the composition.',

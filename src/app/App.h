@@ -1,6 +1,8 @@
 #pragma once
 #include "core/Model.h"
 #include "gfx/Displays.h"
+#include <map>
+#include <cmath>
 #include "gfx/Gfx.h"
 #include "render/Compositor.h"
 #include "render/OutputWindows.h"
@@ -94,7 +96,9 @@ public:
     void setOutput(uint32_t id, bool on);
     void runAction(int action);    // Action (Settings.h)
     void selectStack(int i);
-    void localizeDefaultNames();       // muda a stack visível (os clips no ar continuam)
+    void localizeDefaultNames();
+    void matchOutputRefresh();     // saídas no ar → frequência do monitor = fps do projeto
+    std::map<std::string, float> m_hzApplied;   // monitor → fps já aplicado       // muda a stack visível (os clips no ar continuam)
     void newStack(bool duplicate);
     void applyLanguage();
     void applyPerformance();
