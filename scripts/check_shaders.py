@@ -8,7 +8,7 @@ names = re.search(r'const char\* names\[\] = \{(.*?)\};', src, re.S).group(1)
 entries = [('VS', 'vs_5_0')] + [(n, 'ps_5_0') for n in re.findall(r'"(\w+)"', names)]
 path = os.path.join(root, 'build', 'shaders_check.hlsl')
 os.makedirs(os.path.dirname(path), exist_ok=True)
-open(path, 'w').write(hlsl)
+open(path, 'w', encoding='utf-8').write(hlsl)
 cands = sorted(glob.glob(r'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\fxc.exe'))
 if not cands:
     print('fxc.exe não encontrado'); sys.exit(1)
