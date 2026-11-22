@@ -102,6 +102,12 @@ void Updater::check(bool user) {
     std::thread([this] { runCheck(); }).detach();
 }
 
+// campo de texto do JSON do GitHub (pode vir null ou faltar)
+static std::string jstr(const nlohmann::json& j, const char* key) {
+    auto it = j.find(key);
+    return (it != j.end() && it->is_string()) ? it->get<std::string>() : std::string();
+}
+
 void Updater::runCheck() {
     std::string body, err;
     std::wstring url = L"https://api.github.com/repos/" + fromUtf8(PLAYERSLICE_UPDATE_REPO) + L"/releases/latest";
@@ -113,13 +119,15 @@ void Updater::runCheck() {
     }
     try {
         auto j = nlohmann::json::parse(body);
-        std::string tag = j.value("tag_name", "");
+        std::string tag = jstr(j, "tag_name");
         std::string assetUrl;
-        for (auto& a : j.value("assets", nlohmann::json::array()))
-            if (a.value("name", "") == "PLAYERSLICE-Setup.exe") assetUrl = a.value("browser_download_url", "");
+        auto assets = j.find("assets");
+        if (assets != j.end() && assets->is_array())
+            for (auto& a : *assets)
+                if (jstr(a, "name") == "PLAYERSLICE-Setup.exe") assetUrl = jstr(a, "browser_download_url");
         std::lock_guard<std::mutex> lk(m_mtx);
         m_latest = tag;
-        m_notes = j.value("body", "");
+        m_notes = jstr(j, "body");
         m_url = assetUrl;
         if (compareVersions(tag, PLAYERSLICE_VERSION) > 0 && !assetUrl.empty()) {
             m_state = State::Available;

@@ -151,6 +151,9 @@ void sectionWhatsNew() {
     ImGui::SeparatorText(T("Novidades"));
     struct Rel { const char* ver; std::vector<const char*> items; };
     const Rel rels[] = {
+        {"0.3.1", {
+            "Correção: \"Procurar atualizações\" dava erro quando a release não tinha texto.",
+        }},
         {"0.3.0", {
             "Saída avançada numa janela própria, como no Resolume: lista de ecrãs e slices, caixa de ajuda, Cancelar e Gravar e fechar.",
             "Editar pontos: arrasta os 4 cantos de cada slice com perspetiva real, na entrada e na saída, para encaixar em paredes e arestas.",

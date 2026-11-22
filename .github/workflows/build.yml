@@ -88,6 +88,11 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: PLAYERSLICE ${{ steps.ver.outputs.version }}
           make_latest: true
+          # texto da release (as versões antigas da app precisam que não venha vazio)
+          body: |
+            PLAYERSLICE ${{ steps.ver.outputs.version }} — player de vídeo para ecrãs LED fora de formato.
+            As novidades estão na app em Ajuda → Novidades desta versão.
+            Criado por Daniel Nunes — github.com/NunesDanielPT
           files: |
             dist/PLAYERSLICE-win64.zip
             dist/PLAYERSLICE-Setup.exe

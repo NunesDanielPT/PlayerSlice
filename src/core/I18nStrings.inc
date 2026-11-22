@@ -161,6 +161,7 @@
 {"Marca os ecrãs \"No atalho\" e carrega em F12 para ligar/desligar as saídas. Ctrl+F12 liga todas, Shift+F12 desliga todas.", "Mark screens \"In shortcut\" and press F12 to turn the outputs on/off. Ctrl+F12 turns all on, Shift+F12 turns all off."},
 {"8. Gravar", "8. Saving"},
 {"Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash.", "Ctrl+S saves the project (.psproj). There is an autosave every 30 s and recovery after a crash."},
+{"Correção: \"Procurar atualizações\" dava erro quando a release não tinha texto.", "Fix: \"Check for updates\" failed when the release had no description."},
 {"Saída avançada numa janela própria, como no Resolume: lista de ecrãs e slices, caixa de ajuda, Cancelar e Gravar e fechar.", "Advanced output in its own window, like Resolume: list of screens and slices, help box, Cancel and Save & close."},
 {"Editar pontos: arrasta os 4 cantos de cada slice com perspetiva real, na entrada e na saída, para encaixar em paredes e arestas.", "Edit points: drag the 4 corners of each slice with true perspective, on input and output, to fit walls and edges."},
 {"Transformar slices com perspetiva: mover, redimensionar e rodar mantendo a forma.", "Transform warped slices: move, resize and rotate while keeping their shape."},

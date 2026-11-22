@@ -182,6 +182,7 @@ EN = {
 'Output Transformation':'Output Transformation','Onde e com que forma cada slice aparece na saída.':'Where and with what shape each slice appears on the output.',
 'Adiciona um ecrã com o botão +.':'Add a screen with the + button.','Desfaz tudo o que foi alterado desde que esta janela abriu.':'Undoes everything changed since this window opened.',
 'Gravar e fechar':'Save & close','Saída avançada':'Advanced output','Sem ecrãs. Cria um em Saídas → Saída avançada.':'No screens. Create one in Outputs → Advanced output.',
+'Correção: \\"Procurar atualizações\\" dava erro quando a release não tinha texto.':'Fix: \\"Check for updates\\" failed when the release had no description.',
 'Saída avançada...':'Advanced output...',
 **{f'Disparar coluna {i}':f'Trigger column {i}' for i in range(1,10)},
 }
