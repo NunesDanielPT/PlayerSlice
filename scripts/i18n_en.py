@@ -1,6 +1,9 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Importar do Resolume corrigido: a forma das slices vem da grelha de warp do Resolume (paredes em perspetiva ficam iguais) e os nomes das slices são os do Resolume.':'Import from Resolume fixed: slice shapes come from Resolume\'s warp grid (perspective walls match) and slice names are Resolume\'s.',
+'Exportar para o Resolume leva também a grelha de warp das slices com pontos livres.':'Export to Resolume also includes the warp grid of free-point slices.',
+'slice(s) tinham curvas na grelha de warp; foram aproximadas pelos 4 cantos.':'slice(s) had curves in the warp grid; approximated by the 4 corners.',
 'Importar do Resolume / MapSim (.xml): ecrãs e slices com Input Selection e Output (incluindo rodados e com pontos livres).':'Import from Resolume / MapSim (.xml): screens and slices with Input Selection and Output (including rotated and free points).',
 'Presets de saída: apagar pelo x ao lado de cada preset (ou botão direito), sempre com confirmação.':'Output presets: delete with the x next to each preset (or right-click), always with confirmation.',
 'A lista já não mostra os presets do Resolume; importar/exportar abre em Documentos.':'The list no longer shows Resolume presets; import/export opens in Documents.',

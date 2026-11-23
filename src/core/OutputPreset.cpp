@@ -1,4 +1,5 @@
 #include "core/OutputPreset.h"
+#include "core/Geometry.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -165,6 +166,12 @@ bool quadFrom(const XNode* r, float q[4][2]) {
     for (auto& v : r->kids) if (v->name == "v" && k < 4) { q[k][0] = (float)v->num("x"); q[k][1] = (float)v->num("y"); ++k; }
     return k == 4;
 }
+// <Params name="Common"> (o nome está no atributo, não no elemento)
+const XNode* paramsNamed(const XNode* n, const char* name) {
+    if (!n) return nullptr;
+    for (auto& k : n->kids) if (k->name == "Params" && k->a("name") == name) return k.get();
+    return nullptr;
+}
 std::string paramValue(const XNode* params, const char* name) {
     if (!params) return {};
     for (auto& p : params->kids) if (p->a("name") == name) return p->a("value");
@@ -186,7 +193,7 @@ bool importResolumeXml(const std::string& xml, Project& ids, ResolumeImport& out
             if (sn->name != "Screen") continue;
             Screen s;
             s.id = ids.newId();
-            s.name = paramValue(sn->child("Params"), "Name");
+            s.name = paramValue(paramsNamed(sn.get(), "Params"), "Name");
             if (s.name.empty()) s.name = sn->a("name", "Screen");
             s.device = ScreenDevice::Disabled;
             float maxX = 0, maxY = 0;
@@ -202,12 +209,56 @@ bool importResolumeXml(const std::string& xml, Project& ids, ResolumeImport& out
                     if (ln->name != "Slice") { out.maskedSlices++; if (ln->name == "Mask") continue; }
                     Slice sl;
                     sl.id = ids.newId();
-                    sl.name = paramValue(ln->child("Common"), "Name");
+                    const XNode* common = paramsNamed(ln.get(), "Common");
+                    sl.name = paramValue(common, "Name");
                     if (sl.name.empty()) sl.name = "Slice " + std::to_string(s.slices.size() + 1);
-                    std::string en = paramValue(ln->child("Common"), "Enabled");
+                    std::string en = paramValue(common, "Enabled");
                     sl.enabled = en.empty() || en != "0";
                     float qi[4][2], qo[4][2];
                     if (!quadFrom(ln->child("InputRect"), qi) || !quadFrom(ln->child("OutputRect"), qo)) continue;
+                    if (const XNode* wp = ln->child("Warper")) {
+                        float qw[4][2];
+                        bool have = false;
+                        if (const XNode* bz = wp->child("BezierWarper")) {
+                            int cw = (int)bz->num("controlWidth"), ch = (int)bz->num("controlHeight");
+                            std::vector<std::pair<float, float>> g;
+                            if (const XNode* vs = bz->child("vertices"))
+                                for (auto& v : vs->kids) if (v->name == "v") g.push_back({(float)v->num("x"), (float)v->num("y")});
+                            if (cw >= 2 && ch >= 2 && (int)g.size() == cw * ch) {
+                                const int idx[4] = {0, cw - 1, cw * ch - 1, cw * (ch - 1)};
+                                for (int k = 0; k < 4; ++k) { qw[k][0] = g[idx[k]].first; qw[k][1] = g[idx[k]].second; }
+                                have = true;
+                                // pontos interiores fora do plano → curvas (só os cantos são usados)
+                                float dev = 0;
+                                for (int r = 0; r < ch; ++r) for (int c = 0; c < cw; ++c) {
+                                    float u = (float)c / (cw - 1), w = (float)r / (ch - 1);
+                                    float ex = (1 - u) * (1 - w) * qw[0][0] + u * (1 - w) * qw[1][0] + u * w * qw[2][0] + (1 - u) * w * qw[3][0];
+                                    float ey = (1 - u) * (1 - w) * qw[0][1] + u * (1 - w) * qw[1][1] + u * w * qw[2][1] + (1 - u) * w * qw[3][1];
+                                    dev = std::max(dev, std::hypot(g[r * cw + c].first - ex, g[r * cw + c].second - ey));
+                                }
+                                if (dev > 3.f) out.warpedSlices++;
+                            }
+                        }
+                        if (!have) for (int k = 0; k < 4; ++k) { qw[k][0] = qo[k][0]; qw[k][1] = qo[k][1]; }
+                        // homografia (perspetiva) aplicada por cima
+                        if (const XNode* hg = wp->child("Homography")) {
+                            float a[4][2], b[4][2];
+                            if (quadFrom(hg->child("src"), a) && quadFrom(hg->child("dst"), b)) {
+                                bool same = true;
+                                for (int k = 0; k < 4; ++k) if (!near(a[k][0], b[k][0]) || !near(a[k][1], b[k][1])) same = false;
+                                if (!same) {
+                                    Mat3 hs = inverse(squareToQuad(a)), hd = squareToQuad(b);
+                                    for (int k = 0; k < 4; ++k) {
+                                        double ux, uy, ox, oy;
+                                        apply(hs, qw[k][0], qw[k][1], ux, uy);
+                                        apply(hd, ux, uy, ox, oy);
+                                        qw[k][0] = (float)ox; qw[k][1] = (float)oy;
+                                    }
+                                }
+                            }
+                        }
+                        for (int k = 0; k < 4; ++k) { qo[k][0] = qw[k][0]; qo[k][1] = qw[k][1]; }
+                    }
                     // entrada: retângulo direito (com espelhos) ou quadrilátero livre
                     float x0 = std::min({qi[0][0], qi[1][0], qi[2][0], qi[3][0]}), x1 = std::max({qi[0][0], qi[1][0], qi[2][0], qi[3][0]});
                     float y0 = std::min({qi[0][1], qi[1][1], qi[2][1], qi[3][1]}), y1 = std::max({qi[0][1], qi[1][1], qi[2][1], qi[3][1]});
@@ -242,17 +293,6 @@ bool importResolumeXml(const std::string& xml, Project& ids, ResolumeImport& out
                         sl.outX = (ox0 + ox1) * 0.5f; sl.outY = (oy0 + oy1) * 0.5f; sl.outW = ox1 - ox0; sl.outH = oy1 - oy0;
                     }
                     for (int k = 0; k < 4; ++k) { maxX = std::max(maxX, qo[k][0]); maxY = std::max(maxY, qo[k][1]); }
-                    // warp bezier/homografia diferente do neutro: avisar (não é importado)
-                    if (const XNode* wp = ln->child("Warper")) {
-                        if (const XNode* hg = wp->child("Homography")) {
-                            float a[4][2], b[4][2];
-                            if (quadFrom(hg->child("src"), a) && quadFrom(hg->child("dst"), b)) {
-                                bool same = true;
-                                for (int k = 0; k < 4; ++k) if (!near(a[k][0], b[k][0]) || !near(a[k][1], b[k][1])) same = false;
-                                if (!same) out.warpedSlices++;
-                            }
-                        }
-                    }
                     s.slices.push_back(sl);
                 }
             }
@@ -302,9 +342,36 @@ std::string exportResolumeXml(const Project& p, const std::string& presetName) {
             o << I << "\t\t\t<InputRect orientation=\"0\">\n";
             for (int k = 0; k < 4; ++k) o << I << "\t\t\t\t<v x=\"" << n(qi[k][0]) << "\" y=\"" << n(qi[k][1]) << "\"/>\n";
             o << I << "\t\t\t</InputRect>\n";
+            float rc[4][2];   // retângulo da saída (antes do warp)
+            if (sl.outWarp) {
+                float x0 = std::min({qo[0][0], qo[1][0], qo[2][0], qo[3][0]}), x1 = std::max({qo[0][0], qo[1][0], qo[2][0], qo[3][0]});
+                float y0 = std::min({qo[0][1], qo[1][1], qo[2][1], qo[3][1]}), y1 = std::max({qo[0][1], qo[1][1], qo[2][1], qo[3][1]});
+                float r[4][2] = {{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}};
+                memcpy(rc, r, sizeof(rc));
+            } else memcpy(rc, qo, sizeof(rc));
             o << I << "\t\t\t<OutputRect orientation=\"0\">\n";
-            for (int k = 0; k < 4; ++k) o << I << "\t\t\t\t<v x=\"" << n(qo[k][0]) << "\" y=\"" << n(qo[k][1]) << "\"/>\n";
+            for (int k = 0; k < 4; ++k) o << I << "\t\t\t\t<v x=\"" << n(rc[k][0]) << "\" y=\"" << n(rc[k][1]) << "\"/>\n";
             o << I << "\t\t\t</OutputRect>\n";
+            if (sl.outWarp) {
+                o << I << "\t\t\t<Warper>\n" << I << "\t\t\t\t<Params name=\"Warper\">\n";
+                o << I << "\t\t\t\t\t<ParamChoice name=\"Point Mode\" default=\"PM_LINEAR\" value=\"PM_LINEAR\" storeChoices=\"0\"/>\n";
+                o << I << "\t\t\t\t\t<Param name=\"Flip\" T=\"UINT8\" default=\"0\" value=\"0\"/>\n" << I << "\t\t\t\t</Params>\n";
+                o << I << "\t\t\t\t<BezierWarper controlWidth=\"4\" controlHeight=\"4\">\n" << I << "\t\t\t\t\t<vertices>\n";
+                for (int r = 0; r < 4; ++r) for (int c = 0; c < 4; ++c) {
+                    float u = c / 3.f, w = r / 3.f;
+                    float x = (1 - u) * (1 - w) * qo[0][0] + u * (1 - w) * qo[1][0] + u * w * qo[2][0] + (1 - u) * w * qo[3][0];
+                    float y = (1 - u) * (1 - w) * qo[0][1] + u * (1 - w) * qo[1][1] + u * w * qo[2][1] + (1 - u) * w * qo[3][1];
+                    o << I << "\t\t\t\t\t\t<v x=\"" << n(x) << "\" y=\"" << n(y) << "\"/>\n";
+                }
+                o << I << "\t\t\t\t\t</vertices>\n" << I << "\t\t\t\t</BezierWarper>\n";
+                o << I << "\t\t\t\t<Homography>\n";
+                for (const char* tag : {"src", "dst"}) {
+                    o << I << "\t\t\t\t\t<" << tag << ">\n";
+                    for (int k = 0; k < 4; ++k) o << I << "\t\t\t\t\t\t<v x=\"" << n(rc[k][0]) << "\" y=\"" << n(rc[k][1]) << "\"/>\n";
+                    o << I << "\t\t\t\t\t</" << tag << ">\n";
+                }
+                o << I << "\t\t\t\t</Homography>\n" << I << "\t\t\t</Warper>\n";
+            }
             o << I << "\t\t</Slice>\n";
         }
         o << I << "\t</layers>\n";

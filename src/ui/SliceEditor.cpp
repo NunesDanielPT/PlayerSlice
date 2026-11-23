@@ -1137,7 +1137,7 @@ void importResolume(App& app, const std::filesystem::path& f) {
     app.markDirty();
     int ns = 0; for (auto& s : app.project.screens) ns += (int)s.slices.size();
     g_pr.msg = std::string(T("Importado do Resolume:")) + " " + std::to_string(app.project.screens.size()) + " " + T("ecrã(s)") + ", " + std::to_string(ns) + " " + T("slice(s).");
-    if (r.warpedSlices) g_pr.msg += std::string(" ") + std::to_string(r.warpedSlices) + " " + T("slice(s) tinham warp bezier/grelha, que não foi importado (usa Editar pontos).");
+    if (r.warpedSlices) g_pr.msg += std::string(" ") + std::to_string(r.warpedSlices) + " " + T("slice(s) tinham curvas na grelha de warp; foram aproximadas pelos 4 cantos.");
     if (r.maskedSlices) g_pr.msg += std::string(" ") + std::to_string(r.maskedSlices) + " " + T("máscara(s)/polígono(s) ignorados.");
     g_pr.msg += std::string(" ") + T("Escolhe o dispositivo de cada ecrã à direita.");
     PS_INFO("%s", g_pr.msg.c_str());

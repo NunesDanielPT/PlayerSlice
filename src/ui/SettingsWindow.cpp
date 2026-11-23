@@ -254,6 +254,10 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.8.2", {
+            "Importar do Resolume corrigido: a forma das slices vem da grelha de warp do Resolume (paredes em perspetiva ficam iguais) e os nomes das slices são os do Resolume.",
+            "Exportar para o Resolume leva também a grelha de warp das slices com pontos livres.",
+        }},
         {"0.8.1", {
             "Presets de saída: apagar pelo x ao lado de cada preset (ou botão direito), sempre com confirmação.",
             "A lista já não mostra os presets do Resolume; importar/exportar abre em Documentos.",
