@@ -1,6 +1,9 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Pôr no ar a coluna seguinte / anterior':'Put the next / previous column live','Clip seguinte / anterior na layer L':'Next / previous clip on layer L',
+'Pausa / play da layer':'Layer pause / play','Saltar para uma posição do clip no ar':'Jump to a position in the live clip',
+'Companion: ações OSC Next/Previous Column, Layer Next/Previous Clip, Pause/Resume, Go to Position, Master, Select Layer e Bypass/Solo com alternar.':'Companion: OSC actions Next/Previous Column, Layer Next/Previous Clip, Pause/Resume, Go to Position, Master, Select Layer and toggle Bypass/Solo.',
 'Slices sem serrilhado: bordas suavizadas (anti-aliasing) em slices rodadas ou com pontos livres; slices píxel a píxel continuam nítidas.':'No more jagged slices: smoothed edges (anti-aliasing) on rotated or free-point slices; pixel-perfect slices stay sharp.',
 'Imagem nas slices reduzidas ou em perspetiva sem \\"degraus\\": mipmaps e filtragem anisotrópica (paredes muito inclinadas ficam limpas).':'Picture on scaled-down or perspective slices without \\"stair steps\\": mipmaps and anisotropic filtering (steep walls look clean).',
 'Test pattern: xadrez, círculo, diagonais e moldura desenhados sem serrilhado.':'Test pattern: checkerboard, circle, diagonals and frame drawn without jaggies.',

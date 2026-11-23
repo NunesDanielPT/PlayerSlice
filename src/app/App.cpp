@@ -544,8 +544,24 @@ void App::handleOsc() {
         if (!m.args.empty() && m.args[0].type == 's' && m.args[0].s == "?") { oscQuery(m, a); continue; }
         const float v = m.value(1.f);
         const bool press = v > 0.5f;
+        const bool toggle = !m.args.empty() && m.args[0].type == 's' && m.args[0].s == "!";   // "!" = alternar (Companion)
+        // coluna seguinte/anterior com clips (a partir da última posta no ar)
+        auto stepColumn = [&](int dir) {
+            int n = (int)p.comp.columns.size();
+            if (n <= 0) return;
+            int c = comp.lastColumn();
+            for (int k = 0; k < n; ++k) {
+                c = c < 0 ? (dir > 0 ? 0 : n - 1) : (c + dir + n) % n;
+                bool any = false;
+                for (auto& l : p.comp.layers) if (c < (int)l.clips.size() && !l.clips[c].empty()) any = true;
+                if (any) { comp.triggerColumn(p, c); ui.selColumnProp = c; return; }
+            }
+        };
         if (a.size() >= 2 && a[0] == "composition") {
             if (a[1] == "disconnectall") { if (press) comp.stopAll(p); }
+            else if (a[1] == "connectnextcolumn") { if (press) stepColumn(+1); }
+            else if (a[1] == "connectprevcolumn") { if (press) stepColumn(-1); }
+            else if (a[1] == "master") p.comp.master = std::clamp(v, 0.f, 1.f);
             else if (a[1] == "decks" && a.size() >= 4 && a[3] == "select") { if (press) selectStack(num(2) - 1); }
             else if (a[1] == "selectnextdeck") { if (press) selectStack(p.comp.activeStack + 1); }
             else if (a[1] == "selectprevdeck") { if (press) selectStack(p.comp.activeStack - 1); }
@@ -560,15 +576,36 @@ void App::handleOsc() {
                 if (li < 0) continue;
                 Layer& l = p.comp.layers[li];
                 if (a[3] == "clear" && press) comp.stopLayer(p, li);
+                else if ((a[3] == "connectnextclip" || a[3] == "connectprevclip") && press) {
+                    int n = (int)l.clips.size(), dir = a[3] == "connectnextclip" ? 1 : -1;
+                    int c = l.activeColumn;
+                    for (int k = 0; k < n; ++k) {
+                        c = c < 0 ? (dir > 0 ? 0 : n - 1) : (c + dir + n) % n;
+                        if (!l.clips[c].empty()) { comp.trigger(p, li, c); break; }
+                    }
+                }
                 else if (a[3] == "clips" && a.size() >= 6) {
                     int c = num(4) - 1;
                     if (c < 0 || c >= (int)l.clips.size()) continue;
-                    if (a[5] == "connect" && press) comp.trigger(p, li, c);
-                    else if (a[5] == "select" && press) comp.previewClip(p, li, c);
+                    Clip& cl = l.clips[c];
+                    std::string rest;
+                    for (size_t k = 5; k < a.size(); ++k) rest += (k > 5 ? "/" : "") + a[k];
+                    if (rest == "connect" && press) comp.trigger(p, li, c);
+                    else if (rest == "select" && press) comp.previewClip(p, li, c);
+                    else if (rest == "video/opacity") cl.opacity = std::clamp(v, 0.f, 1.f);
+                    else if (rest == "transport/position" && l.activeColumn == c) {
+                        // saltar para uma posição (0..1) no clip que está no ar
+                        if (VideoPlayer* vp = comp.activePlayer(l.id)) vp->seek(std::clamp(v, 0.f, 1.f) * vp->trimLength());
+                    }
                 }
-                else if (a[3] == "video" && a.size() >= 5 && a[4] == "opacity") l.opacity = std::clamp(v, 0.f, 1.f);
-                else if (a[3] == "bypassed") l.bypass = press;
-                else if (a[3] == "solo") l.solo = press;
+                else if (a[3] == "direction") {
+                    // Resolume: 0 para trás, 1 pausa, 2 para a frente
+                    if (VideoPlayer* vp = comp.activePlayer(l.id)) vp->setPaused((int)std::lround(v) == 1);
+                }
+                else if (a[3] == "select" && press) ui.selLayer = li;
+                else if ((a[3] == "video" && a.size() >= 5 && a[4] == "opacity") || a[3] == "master") l.opacity = std::clamp(v, 0.f, 1.f);
+                else if (a[3] == "bypassed") l.bypass = toggle ? !l.bypass : press;
+                else if (a[3] == "solo") l.solo = toggle ? !l.solo : press;
             } else if (a[1] == "video" && a.size() >= 3 && a[2] == "opacity") p.comp.master = std::clamp(v, 0.f, 1.f);
         } else if (a.size() >= 2 && a[0] == "playerslice") {
             if (a[1] == "outputs" && a.size() >= 3) {

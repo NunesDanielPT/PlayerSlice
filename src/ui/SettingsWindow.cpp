@@ -137,6 +137,10 @@ void sectionOsc(App& app) {
         {"/composition/layers/L/clips/C/select", T("Pôr o clip em preview")},
         {"/composition/layers/L/clear", T("Parar a layer L")},
         {"/composition/disconnectall", T("Parar todos os clips")},
+        {"/composition/connectnextcolumn | connectprevcolumn", T("Pôr no ar a coluna seguinte / anterior")},
+        {"/composition/layers/L/connectnextclip | connectprevclip", T("Clip seguinte / anterior na layer L")},
+        {"/composition/layers/L/direction  (1 = pausa, 2 = play)", T("Pausa / play da layer")},
+        {"/composition/layers/L/clips/C/transport/position  (0..1)", T("Saltar para uma posição do clip no ar")},
         {"/composition/decks/N/select", T("Mostrar a stack N")},
         {"/playerslice/cue/go | back", T("Cue seguinte / anterior")},
         {"/playerslice/cue/N   ou   /playerslice/cue/fire N", T("Disparar o cue N (ex.: 3 ou 2.5)")},
@@ -253,6 +257,9 @@ void sectionWhatsNew() {
             "Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.",
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
+        }},
+        {"0.8.5", {
+            "Companion: ações OSC Next/Previous Column, Layer Next/Previous Clip, Pause/Resume, Go to Position, Master, Select Layer e Bypass/Solo com alternar.",
         }},
         {"0.8.4", {
             "Slices sem serrilhado: bordas suavizadas (anti-aliasing) em slices rodadas ou com pontos livres; slices píxel a píxel continuam nítidas.",
