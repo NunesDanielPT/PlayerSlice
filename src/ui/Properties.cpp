@@ -89,17 +89,42 @@ void effectsEditor(App& app, std::vector<Effect>& fx, const char* id) {
     ImGui::PopID();
 }
 
-static bool beginPanel(const char* pt, const char* id, bool* open) {
+// cada painel tem a sua cor (faixa no topo + cabeçalhos das secções) para não se confundirem:
+// Composição roxo, Layer azul, Coluna âmbar, Clip verde-água
+static bool beginPanel(const char* pt, const char* id, bool* open, ImU32 accent) {
     if (!*open) return false;
     if (!ImGui::Begin(winTitle(pt, id).c_str(), open)) { ImGui::End(); return false; }
+    ImVec4 a = ImGui::ColorConvertU32ToFloat4(accent);
+    auto mul = [&](float k) { return ImVec4(std::min(1.f, a.x * k), std::min(1.f, a.y * k), std::min(1.f, a.z * k), 1); };
+    ImGui::PushStyleColor(ImGuiCol_Header, mul(1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, mul(1.18f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, mul(1.35f));
+    // faixa com o nome do painel
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    float w = ImGui::GetContentRegionAvail().x, h = ImGui::GetFrameHeight() + 2;
+    dl->AddRectFilled(p0, ImVec2(p0.x + w, p0.y + h), IM_COL32((int)(a.x * 255 * 0.55f), (int)(a.y * 255 * 0.55f), (int)(a.z * 255 * 0.55f), 255), 3);
+    dl->AddRectFilled(p0, ImVec2(p0.x + 4, p0.y + h), accent, 2);
+    std::string title = T(pt);
+    for (size_t i = 0; i < title.size(); ++i) {
+        unsigned char ch = (unsigned char)title[i];
+        if (ch >= 'a' && ch <= 'z') title[i] = (char)(ch - 32);
+        else if (ch == 0xC3 && i + 1 < title.size()) {   // à-þ → À-Þ (UTF-8)
+            unsigned char n = (unsigned char)title[i + 1];
+            if (n >= 0xA0 && n <= 0xBE && n != 0xB7) title[i + 1] = (char)(n - 0x20);
+            ++i;
+        }
+    }
+    dl->AddText(ImVec2(p0.x + 12, p0.y + (h - ImGui::GetTextLineHeight()) * 0.5f), IM_COL32(255, 255, 255, 235), title.c_str());
+    ImGui::Dummy(ImVec2(w, h));
     ImGui::PushItemWidth(-110);
     return true;
 }
-static void endPanel() { ImGui::PopItemWidth(); ImGui::End(); }
+static void endPanel() { ImGui::PopItemWidth(); ImGui::PopStyleColor(3); ImGui::End(); }
 
 // ---------------------------------------------------------------------------
 static void compositionPanel(App& app) {
-    if (!beginPanel("Composição", "props_comp", &app.ui.panel.propComp)) return;
+    if (!beginPanel("Composição", "props_comp", &app.ui.panel.propComp, IM_COL32(124, 78, 170, 255))) return;
     Composition& c = app.project.comp;
     ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.75f, 1), "%s (%dx%d)", c.name.c_str(), c.width, c.height);
     ImGui::SameLine();
@@ -118,7 +143,7 @@ static void compositionPanel(App& app) {
 }
 
 static void layerPanel(App& app) {
-    if (!beginPanel("Layer", "props_layer", &app.ui.panel.propLayer)) return;
+    if (!beginPanel("Layer", "props_layer", &app.ui.panel.propLayer, IM_COL32(52, 100, 178, 255))) return;
     Project& p = app.project;
     int li = app.ui.selLayer;
     if (li < 0 || li >= (int)p.comp.layers.size()) { ImGui::TextDisabled("%s", T("Seleciona uma layer.")); endPanel(); return; }
@@ -165,7 +190,7 @@ static void layerPanel(App& app) {
 }
 
 static void columnPanel(App& app) {
-    if (!beginPanel("Coluna", "props_col", &app.ui.panel.propColumn)) return;
+    if (!beginPanel("Coluna", "props_col", &app.ui.panel.propColumn, IM_COL32(170, 118, 34, 255))) return;
     Project& p = app.project;
     int c = app.ui.selColumnProp;
     if (c < 0 || c >= (int)p.comp.columns.size()) { ImGui::TextDisabled("%s", T("Clica no cabeçalho de uma coluna.")); endPanel(); return; }
@@ -299,7 +324,7 @@ static void clipTransport(App& app, Layer& l, int ci, Clip& c, double fileDur) {
 }
 
 static void clipPanel(App& app) {
-    if (!beginPanel("Clip", "props_clip", &app.ui.panel.propClip)) return;
+    if (!beginPanel("Clip", "props_clip", &app.ui.panel.propClip, IM_COL32(40, 128, 110, 255))) return;
     Project& p = app.project;
     int li = app.ui.selLayer, ci = app.ui.selColumn;
     if (li < 0 || li >= (int)p.comp.layers.size() || ci < 0 || ci >= (int)p.comp.layers[li].clips.size() || p.comp.layers[li].clips[ci].empty()) {

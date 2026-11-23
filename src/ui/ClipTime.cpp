@@ -167,7 +167,22 @@ void drawClipTime(App& app) {
 
     auto items = gather(app, false);
     // painel estreito → letra mais pequena; painel largo → nunca maior do que o tamanho normal
-    const float k = std::clamp((avail.x - 24.f) / 300.f, 0.3f, 1.f);
+    // o tamanho também baixa quando o painel fica baixo (para caber tudo na altura disponível)
+    float k = std::clamp((avail.x - 24.f) / 300.f, 0.3f, 1.f);
+    {
+        const int nItems = std::max(1, (int)gather(app, false).size());
+        const float lineH = ImGui::GetTextLineHeight();
+        auto fits = [&](float kk) {
+            float iw = 300 * kk + 20 * kk;
+            int perRow = std::max(1, (int)((avail.x - (kk < 1 ? 4 : 80)) / iw));
+            int rows = (nItems + perRow - 1) / perRow;
+            float itemH = lineH * std::max(0.75f, kk) + 2 + 40.f * kk * 1.15f + 8;
+            float top = kk < 1 ? ImGui::GetFrameHeight() + 2 : 4;
+            return top + rows * itemH + (rows - 1) * 14 <= avail.y;
+        };
+        while (k > 0.3f && !fits(k)) k -= 0.05f;
+        k = std::max(k, 0.3f);
+    }
     const float itemW = 300 * k, big = 40.f * k;
     float x0 = ImGui::GetCursorScreenPos().x, xMax = x0 + avail.x - (k < 1 ? 4 : 80);
     ImVec2 cur = ImGui::GetCursorScreenPos();

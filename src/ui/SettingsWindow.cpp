@@ -245,6 +245,10 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.7.2", {
+            "Painéis de propriedades com cores próprias para não se confundirem: Composição roxo, Layer azul, Coluna âmbar, Clip verde-água (faixa com o nome no topo e cabeçalhos das secções).",
+            "Clip Time: os números também encolhem quando o painel fica baixo (cabe tudo na altura).",
+        }},
         {"0.7.1", {
             "Monitor de Preview: os botões passam para a linha de baixo quando o painel é estreito (sem ficarem cortados nem mais pequenos); textos mais curtos em painéis pequenos.",
         }},

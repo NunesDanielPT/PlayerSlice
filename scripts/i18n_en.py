@@ -1,6 +1,8 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Painéis de propriedades com cores próprias para não se confundirem: Composição roxo, Layer azul, Coluna âmbar, Clip verde-água (faixa com o nome no topo e cabeçalhos das secções).':'Properties panels have their own colors so they are not confused: Composition purple, Layer blue, Column amber, Clip teal (name strip at the top and section headers).',
+'Clip Time: os números também encolhem quando o painel fica baixo (cabe tudo na altura).':'Clip Time: the numbers also shrink when the panel is short (everything fits in the height).',
 'Monitor de Preview: os botões passam para a linha de baixo quando o painel é estreito (sem ficarem cortados nem mais pequenos); textos mais curtos em painéis pequenos.':'Preview monitor: buttons wrap to the next line when the panel is narrow (no clipping, same size); shorter labels on small panels.',
 'Para programa':'To program',
 'Cue seguinte (GO)':'Next cue (GO)',
