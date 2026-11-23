@@ -5,6 +5,8 @@
 //   Rodapé   : Cancelar / Gravar e fechar
 // Modos de edição: Transformar (mover/redimensionar/rodar) e Editar pontos (4 cantos com perspetiva).
 #include "ui/UI.h"
+#include "render/NdiOutput.h"
+#include "core/OutputPreset.h"
 #include "core/I18n.h"
 #include "app/App.h"
 #include "core/Log.h"
@@ -12,6 +14,11 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <commdlg.h>
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+#include <shellapi.h>
+#include <shlobj.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -246,6 +253,16 @@ Slice& duplicateSlice(App& app, Screen& sc, const Slice& src) {
 // ---------------------------------------------------------------------------
 // esquerda: ecrãs e slices
 // ---------------------------------------------------------------------------
+static std::string deviceLabel(const Screen& s) {
+    switch (s.device) {
+    case ScreenDevice::Disabled: return T("Desligado");
+    case ScreenDevice::Window:   return T("Janela (teste)");
+    case ScreenDevice::NDI:      return std::string("NDI: ") + (s.ndiName.empty() ? s.name : s.ndiName);
+    case ScreenDevice::Virtual:  return T("Saída virtual");
+    default:                     return s.monitorKey;
+    }
+}
+
 void screenList(App& app) {
     Project& p = app.project;
     if (ImGui::Button("+", ImVec2(32, 0))) ImGui::OpenPopup("addmenu");
@@ -293,9 +310,7 @@ void screenList(App& app) {
             ImGui::EndPopup();
         }
         // subtítulo com a saída, como no Resolume
-        std::string dev = s.device == ScreenDevice::Disabled ? std::string(T("Desligado"))
-                        : s.device == ScreenDevice::Window ? std::string(T("Janela (teste)"))
-                        : s.monitorKey;
+        std::string dev = deviceLabel(s);
         for (auto& d : app.displays) if (s.device == ScreenDevice::Monitor && d.key == s.monitorKey) dev = d.label();
         ImGui::Indent(18);
         ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.75f, 1), "%s", dev.c_str());
@@ -395,7 +410,7 @@ void screenProps(App& app, Screen& s) {
     inputTextStd(T("Nome##scr"), s.name);
     undoOnActivate(app);
 
-    std::string cur = s.device == ScreenDevice::Disabled ? T("Desligado") : s.device == ScreenDevice::Window ? T("Janela (teste)") : s.monitorKey;
+    std::string cur = deviceLabel(s);
     for (auto& d : app.displays) if (s.device == ScreenDevice::Monitor && d.key == s.monitorKey) cur = d.label();
     bool missing = s.device == ScreenDevice::Monitor &&
                    std::none_of(app.displays.begin(), app.displays.end(), [&](const DisplayInfo& d) { return d.key == s.monitorKey; });
@@ -403,6 +418,10 @@ void screenProps(App& app, Screen& s) {
     if (ImGui::BeginCombo(T("Dispositivo"), cur.c_str())) {
         if (ImGui::Selectable(T("Desligado"), s.device == ScreenDevice::Disabled)) { app.checkpoint(); s.device = ScreenDevice::Disabled; }
         if (ImGui::Selectable(T("Janela (teste)"), s.device == ScreenDevice::Window)) { app.checkpoint(); s.device = ScreenDevice::Window; }
+        if (ImGui::Selectable(T("NDI (rede)"), s.device == ScreenDevice::NDI)) { app.checkpoint(); s.device = ScreenDevice::NDI; }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Envia este ecrã pela rede como fonte NDI (Resolume, vMix, OBS, Pixera...). Precisa do NDI Runtime ou do NDI Tools instalado."));
+        if (ImGui::Selectable(T("Saída virtual"), s.device == ScreenDevice::Virtual)) { app.checkpoint(); s.device = ScreenDevice::Virtual; }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Ecrã que só existe no PLAYERSLICE: vês nos monitores (Ver → Ecrã) e no editor, sem ocupar nenhuma saída."));
         ImGui::Separator();
         for (auto& d : app.displays) {
             bool sel = s.device == ScreenDevice::Monitor && s.monitorKey == d.key;
@@ -419,6 +438,19 @@ void screenProps(App& app, Screen& s) {
         ImGui::EndCombo();
     }
     hint(T("Saída da placa gráfica onde este ecrã aparece."));
+    if (s.device == ScreenDevice::NDI) {
+        std::string nm = s.ndiName;
+        if (inputTextStd(T("Nome NDI"), nm)) s.ndiName = nm;
+        undoOnActivate(app);
+        hint(T("Nome da fonte que aparece nos outros programas (vazio = nome do ecrã)."));
+        if (!NdiOutputs::get().runtimeAvailable()) {
+            ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), "%s", T(NdiOutputs::get().runtimeError().c_str()));
+            ImGui::TextWrapped("%s", T("Instala o NDI Tools (gratuito) de ndi.video/tools e reinicia o PLAYERSLICE."));
+            if (ImGui::SmallButton(T("Abrir ndi.video/tools"))) ShellExecuteW(nullptr, L"open", L"https://ndi.video/tools/", nullptr, nullptr, SW_SHOWNORMAL);
+        } else ImGui::TextColored(ImVec4(0.35f, 0.9f, 0.5f, 1), "%s", T("NDI pronto. A fonte só envia imagem com a saída ligada (desligada = preto)."));
+    } else if (s.device == ScreenDevice::Virtual) {
+        ImGui::TextWrapped("%s", T("Saída virtual: não vai para nenhum monitor. Vê-a em Preview/Programa → Ver → este ecrã."));
+    }
 
     int wh[2] = {s.width, s.height};
     if (ImGui::InputInt2(T("Resolução"), wh)) { s.width = std::clamp(wh[0], 16, 16384); s.height = std::clamp(wh[1], 16, 16384); }
@@ -1013,6 +1045,220 @@ bool rectEditor(App& app, const char* id, Rect& r, float maxW, float maxH) {
     return changed;
 }
 
+// ---------------------------------------------------------------------------
+// presets de saída (como o Resolume): Documentos\PLAYERSLICE\Saídas\*.psout
+// ---------------------------------------------------------------------------
+namespace {
+std::filesystem::path documentsDir() {
+    PWSTR p = nullptr;
+    std::filesystem::path r;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &p))) { r = p; CoTaskMemFree(p); }
+    return r;
+}
+std::filesystem::path presetDir() {
+    auto d = documentsDir() / L"PLAYERSLICE" / L"Saídas";
+    std::error_code ec; std::filesystem::create_directories(d, ec);
+    return d;
+}
+std::filesystem::path resolumePresetDir() { return documentsDir() / L"Resolume Arena" / L"Presets" / L"Advanced Output"; }
+bool readText(const std::filesystem::path& f, std::string& out) {
+    std::ifstream in(f, std::ios::binary);
+    if (!in) return false;
+    std::stringstream ss; ss << in.rdbuf(); out = ss.str();
+    return true;
+}
+bool writeText(const std::filesystem::path& f, const std::string& s) {
+    std::filesystem::path tmp = f; tmp += L".tmp";
+    { std::ofstream o(tmp, std::ios::binary); if (!o) return false; o << s; if (!o) return false; }
+    std::error_code ec;
+    std::filesystem::rename(tmp, f, ec);
+    if (ec) { std::filesystem::remove(f, ec); std::filesystem::rename(tmp, f, ec); }
+    return !ec;
+}
+std::vector<std::filesystem::path> listFiles(const std::filesystem::path& dir, const wchar_t* ext) {
+    std::vector<std::filesystem::path> v;
+    std::error_code ec;
+    for (auto& e : std::filesystem::directory_iterator(dir, ec)) if (e.is_regular_file() && _wcsicmp(e.path().extension().c_str(), ext) == 0) v.push_back(e.path());
+    std::sort(v.begin(), v.end());
+    return v;
+}
+std::string fileDialog(HWND owner, bool save, const wchar_t* filterName, const wchar_t* pattern, const wchar_t* defExt, const std::wstring& initDir, const std::wstring& initName = L"") {
+    wchar_t file[MAX_PATH] = L"";
+    wcsncpy(file, initName.c_str(), MAX_PATH - 1);
+    std::wstring filter = filterName; filter.push_back(0); filter += pattern; filter.push_back(0); filter.push_back(0);
+    OPENFILENAMEW of{sizeof(of)};
+    of.hwndOwner = owner; of.lpstrFilter = filter.c_str(); of.lpstrFile = file; of.nMaxFile = MAX_PATH;
+    of.lpstrInitialDir = initDir.empty() ? nullptr : initDir.c_str();
+    of.lpstrDefExt = defExt;
+    of.Flags = OFN_NOCHANGEDIR | (save ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST);
+    bool ok = save ? GetSaveFileNameW(&of) : GetOpenFileNameW(&of);
+    return ok ? toUtf8(file) : std::string();
+}
+
+struct PresetUi {
+    int nameMode = 0;            // 1 gravar como, 2 mudar o nome
+    char name[128] = "";
+    bool askComp = false;        // perguntar se muda o tamanho da composição
+    int compW = 0, compH = 0;
+    std::string msg;
+} g_pr;
+
+void loadPresetFile(App& app, const std::filesystem::path& f) {
+    std::string txt, err;
+    if (!readText(f, txt)) { PS_ERROR("%s", T("Não foi possível ler o ficheiro")); return; }
+    app.checkpoint();
+    if (!importScreensJson(app.project, txt, &err)) { PS_ERROR("%s: %s", T("Preset inválido"), err.c_str()); return; }
+    app.ui.outPreset = toUtf8(f.stem().wstring());
+    app.ui.selScreen = app.project.screens.empty() ? 0 : app.project.screens[0].id;
+    app.ui.selSlice = 0;
+    app.markDirty();
+    PS_INFO("%s: %s", T("Preset de saída carregado"), app.ui.outPreset.c_str());
+}
+
+bool savePreset(App& app, const std::string& name) {
+    if (name.empty()) return false;
+    auto f = presetDir() / (fromUtf8(name) + L".psout");
+    if (!writeText(f, exportScreensJson(app.project))) { PS_ERROR("%s", T("Não foi possível gravar o preset")); return false; }
+    app.ui.outPreset = name;
+    PS_INFO("%s: %s", T("Preset de saída gravado"), name.c_str());
+    return true;
+}
+
+void importResolume(App& app, const std::filesystem::path& f) {
+    std::string txt, err;
+    if (!readText(f, txt)) { PS_ERROR("%s", T("Não foi possível ler o ficheiro")); return; }
+    ResolumeImport r;
+    if (!importResolumeXml(txt, app.project, r, &err)) { PS_ERROR("%s: %s", T("Importar do Resolume"), err.c_str()); return; }
+    app.checkpoint();
+    app.project.screens = std::move(r.screens);
+    app.ui.selScreen = app.project.screens[0].id;
+    app.ui.selSlice = 0;
+    app.ui.outPreset = toUtf8(f.stem().wstring());
+    app.markDirty();
+    int ns = 0; for (auto& s : app.project.screens) ns += (int)s.slices.size();
+    g_pr.msg = std::string(T("Importado do Resolume:")) + " " + std::to_string(app.project.screens.size()) + " " + T("ecrã(s)") + ", " + std::to_string(ns) + " " + T("slice(s).");
+    if (r.warpedSlices) g_pr.msg += std::string(" ") + std::to_string(r.warpedSlices) + " " + T("slice(s) tinham warp bezier/grelha, que não foi importado (usa Editar pontos).");
+    if (r.maskedSlices) g_pr.msg += std::string(" ") + std::to_string(r.maskedSlices) + " " + T("máscara(s)/polígono(s) ignorados.");
+    g_pr.msg += std::string(" ") + T("Escolhe o dispositivo de cada ecrã à direita.");
+    PS_INFO("%s", g_pr.msg.c_str());
+    if (r.compW > 0 && r.compH > 0 && (r.compW != app.project.comp.width || r.compH != app.project.comp.height)) {
+        g_pr.askComp = true; g_pr.compW = r.compW; g_pr.compH = r.compH;
+    }
+}
+} // namespace
+
+static void presetBar(App& app) {
+    Project& p = app.project;
+    std::string cur = app.ui.outPreset.empty() ? std::string(T("(sem preset)")) : app.ui.outPreset;
+    std::string lbl = cur + "  ▾###presetbtn";
+    if (ImGui::Button(lbl.c_str(), ImVec2(-1, 0))) ImGui::OpenPopup("##presetmenu");
+    hint(T("Presets de saída: grava e carrega configurações de ecrãs e slices, e importa/exporta do Resolume."));
+    bool openName = false;
+    if (ImGui::BeginPopup("##presetmenu")) {
+        if (ImGui::MenuItem(T("Gravar"), nullptr, false, true)) {
+            if (app.ui.outPreset.empty()) { g_pr.nameMode = 1; openName = true; } else savePreset(app, app.ui.outPreset);
+        }
+        if (ImGui::MenuItem(T("Gravar como..."))) { g_pr.nameMode = 1; openName = true; }
+        if (ImGui::MenuItem(T("Mudar o nome..."), nullptr, false, !app.ui.outPreset.empty())) { g_pr.nameMode = 2; openName = true; }
+        if (ImGui::MenuItem(T("Apagar"), nullptr, false, !app.ui.outPreset.empty())) {
+            std::error_code ec;
+            std::filesystem::remove(presetDir() / (fromUtf8(app.ui.outPreset) + L".psout"), ec);
+            app.ui.outPreset.clear();
+        }
+        if (ImGui::MenuItem(T("Novo"))) {
+            app.checkpoint();
+            p.screens.clear();
+            Screen& s = p.addScreen(T("Ecrã ") + std::string("1"));
+            p.addSlice(s, T("Slice ") + std::string("1"));
+            app.ui.selScreen = s.id; app.ui.selSlice = 0;
+            app.ui.outPreset.clear();
+            app.markDirty();
+        }
+        if (ImGui::MenuItem(T("Mostrar no Explorador"))) ShellExecuteW(nullptr, L"open", presetDir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        if (ImGui::MenuItem(T("Carregar ficheiro..."))) {
+            std::string f = fileDialog(app.hwnd(), false, L"PLAYERSLICE (*.psout)", L"*.psout", L"psout", presetDir().wstring());
+            if (!f.empty()) loadPresetFile(app, std::filesystem::path(fromUtf8(f)));
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem(T("Importar do Resolume / MapSim (.xml)..."))) {
+            auto rd = resolumePresetDir();
+            std::error_code ec;
+            std::string f = fileDialog(app.hwnd(), false, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", std::filesystem::exists(rd, ec) ? rd.wstring() : documentsDir().wstring());
+            if (!f.empty()) importResolume(app, std::filesystem::path(fromUtf8(f)));
+        }
+        if (ImGui::MenuItem(T("Exportar para o Resolume (.xml)..."))) {
+            auto rd = resolumePresetDir();
+            std::error_code ec;
+            std::wstring nm = fromUtf8(app.ui.outPreset.empty() ? std::string("PLAYERSLICE") : app.ui.outPreset);
+            std::string f = fileDialog(app.hwnd(), true, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", std::filesystem::exists(rd, ec) ? rd.wstring() : documentsDir().wstring(), nm + L".xml");
+            if (!f.empty()) {
+                if (writeText(std::filesystem::path(fromUtf8(f)), exportResolumeXml(p, app.ui.outPreset.empty() ? "PLAYERSLICE" : app.ui.outPreset)))
+                    PS_INFO("%s: %s", T("Exportado para o Resolume"), f.c_str());
+                else PS_ERROR("%s", T("Não foi possível gravar o ficheiro"));
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Grava na pasta de presets do Resolume (Documentos → Resolume Arena → Presets → Advanced Output) para aparecer na lista do Resolume."));
+        auto mine = listFiles(presetDir(), L".psout");
+        ImGui::SeparatorText(T("Presets"));
+        if (mine.empty()) ImGui::TextDisabled("%s", T("(nenhum)"));
+        for (auto& f : mine) {
+            std::string nm = toUtf8(f.stem().wstring());
+            bool cur2 = nm == app.ui.outPreset;
+            if (ImGui::MenuItem((std::string(cur2 ? "● " : "   ") + nm + "##p").c_str())) loadPresetFile(app, f);
+        }
+        std::error_code ec;
+        auto rd = resolumePresetDir();
+        if (std::filesystem::exists(rd, ec)) {
+            auto res = listFiles(rd, L".xml");
+            if (!res.empty()) {
+                ImGui::SeparatorText(T("Presets do Resolume"));
+                for (auto& f : res) if (ImGui::MenuItem((toUtf8(f.stem().wstring()) + "##r").c_str())) importResolume(app, f);
+            }
+        }
+        ImGui::EndPopup();
+    }
+    if (openName) {
+        snprintf(g_pr.name, sizeof(g_pr.name), "%s", app.ui.outPreset.c_str());
+        ImGui::OpenPopup("##presetname");
+    }
+    if (ImGui::BeginPopup("##presetname")) {
+        ImGui::TextUnformatted(g_pr.nameMode == 2 ? T("Novo nome do preset") : T("Nome do preset"));
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        ImGui::SetNextItemWidth(260);
+        bool ok = ImGui::InputText("##pn", g_pr.name, sizeof(g_pr.name), ImGuiInputTextFlags_EnterReturnsTrue);
+        ok |= ImGui::Button(T("OK"));
+        ImGui::SameLine();
+        if (ImGui::Button(T("Cancelar"))) ImGui::CloseCurrentPopup();
+        std::string nm = g_pr.name;
+        for (char& c : nm) if (strchr("\\/:*?\"<>|", c)) c = '_';
+        if (ok && !nm.empty()) {
+            if (g_pr.nameMode == 2 && !app.ui.outPreset.empty()) {
+                std::error_code ec;
+                std::filesystem::rename(presetDir() / (fromUtf8(app.ui.outPreset) + L".psout"), presetDir() / (fromUtf8(nm) + L".psout"), ec);
+                if (!ec) app.ui.outPreset = nm; else PS_ERROR("%s", T("Não foi possível mudar o nome"));
+            } else savePreset(app, nm);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    // pergunta: tamanho da composição do preset importado
+    if (g_pr.askComp) { ImGui::OpenPopup("##askcomp"); g_pr.askComp = false; }
+    if (ImGui::BeginPopupModal("##askcomp", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text(T("O preset foi feito para uma composição de %dx%d (a tua é %dx%d)."), g_pr.compW, g_pr.compH, p.comp.width, p.comp.height);
+        ImGui::TextDisabled("%s", T("As slices usam píxeis dessa composição."));
+        if (ImGui::Button(T("Mudar a composição"))) { app.checkpoint(); p.comp.width = g_pr.compW; p.comp.height = g_pr.compH; app.markDirty(); ImGui::CloseCurrentPopup(); }
+        ImGui::SameLine();
+        if (ImGui::Button(T("Manter"))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    if (!g_pr.msg.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.85f, 0.75f, 1));
+        ImGui::TextWrapped("%s", g_pr.msg.c_str());
+        ImGui::PopStyleColor();
+        if (ImGui::SmallButton(T("OK##prmsg"))) g_pr.msg.clear();
+    }
+}
+
 void drawSliceEditor(App& app) {
     if (app.ui.focusEditor) { app.ui.showAdvOutput = true; app.ui.focusEditor = false; ImGui::SetNextWindowFocus(); }
     if (!app.ui.showAdvOutput) { g_ed.wasOpen = false; g_ed.mode = Drag::None; return; }
@@ -1038,7 +1284,10 @@ void drawSliceEditor(App& app) {
 
     // esquerda: lista + ajuda
     ImGui::BeginGroup();
-    ImGui::BeginChild("list", ImVec2(260, bodyH - 134), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("presets", ImVec2(260, 0), ImGuiChildFlags_AutoResizeY);
+    presetBar(app);
+    ImGui::EndChild();
+    ImGui::BeginChild("list", ImVec2(260, std::max(120.f, bodyH - 134 - ImGui::GetItemRectSize().y - ImGui::GetStyle().ItemSpacing.y)), ImGuiChildFlags_Borders);
     screenList(app);
     ImGui::EndChild();
     ImGui::BeginChild("help", ImVec2(260, 128), ImGuiChildFlags_Borders);

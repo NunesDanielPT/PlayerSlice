@@ -142,13 +142,15 @@ struct Slice {
     void outputQuad(float q[4][2]) const;  // cantos da saída (rotação ou pontos)
 };
 
-enum class ScreenDevice : int { Disabled = 0, Window = 1, Monitor = 2 };
+// NDI: enviado pela rede (precisa do NDI Runtime); Virtual: só existe no PLAYERSLICE (ver nos monitores/editor)
+enum class ScreenDevice : int { Disabled = 0, Window = 1, Monitor = 2, NDI = 3, Virtual = 4 };
 
 struct Screen {
     uint32_t    id = 0;
     std::string name;
     ScreenDevice device = ScreenDevice::Disabled;
     std::string monitorKey;         // ex. \\.\DISPLAY2 — identifica a saída da gráfica
+    std::string ndiName;            // nome da fonte NDI (vazio = nome do ecrã)
     int         width = 1920;
     int         height = 1080;
     float       brightness = 0.0f;

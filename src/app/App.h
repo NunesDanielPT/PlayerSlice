@@ -36,6 +36,7 @@ struct UIState {
     bool     showLog = false;
     bool     focusEditor = false;
     bool     showAdvOutput = false;   // janela "Saída avançada"
+    std::string outPreset;            // preset de saída atual (nome do ficheiro sem extensão)
     bool     editPoints = false;      // editor: modo Editar pontos
     bool     handTool = false;        // editor: ferramenta mão
     bool     monitorGizmo = true;     // moldura de transformação nos monitores

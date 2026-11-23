@@ -3,6 +3,7 @@
 #include "core/CrashHandler.h"
 #include "core/I18n.h"
 #include "core/Timecode.h"
+#include "render/NdiOutput.h"
 #include "core/Settings.h"
 #include "core/Updater.h"
 #include "core/Osc.h"
@@ -727,6 +728,7 @@ void App::outputsOnlyFrame() {
     auto live = [this](uint32_t id) { return isLive(id); };
     bool vsynced = false;
     outputs.present(comp, live, vsynced);
+    NdiOutputs::get().present(project, comp, live, project.comp.fps > 0 ? project.comp.fps : (float)outputs.outputFps());
     if (!vsynced) Sleep(1);
 }
 
@@ -790,6 +792,7 @@ void App::frame() {
 
     bool vsynced = false;
     outputs.present(comp, live, vsynced);
+    NdiOutputs::get().present(project, comp, live, project.comp.fps > 0 ? project.comp.fps : (float)outputs.outputFps());
     if (drawUi) m_swap->Present(vsynced ? 0 : 1, 0);
     else if (!vsynced) Sleep(1);
 
@@ -887,6 +890,7 @@ int App::run(HINSTANCE inst) {
     updateMouseLock({}, m_hwnd);
     Osc::get().shutdown();
     Timecode::get().shutdown();
+    NdiOutputs::get().shutdown();
     WebServer::get().shutdown();
     outputs.closeAll();
     comp.stopAll(project);

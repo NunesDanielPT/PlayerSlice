@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(PLAYERSLICE VERSION 0.7.2 LANGUAGES C CXX)
+project(PLAYERSLICE VERSION 0.8.0 LANGUAGES C CXX)
 
 # PLAYERSLICE — player de vídeo para ecrãs fora de formato (slices)
 # Criado por Daniel Nunes — github.com/NunesDanielPT
@@ -67,6 +67,7 @@ add_executable(PLAYERSLICE WIN32
   src/core/Effects.cpp
   src/core/Osc.cpp
   src/core/Timecode.cpp
+  src/core/OutputPreset.cpp
   src/core/WebServer.cpp
   src/core/Settings.cpp
   src/core/Updater.cpp
@@ -77,6 +78,7 @@ add_executable(PLAYERSLICE WIN32
   src/video/Thumbnail.cpp
   src/render/Compositor.cpp
   src/render/OutputWindows.cpp
+  src/render/NdiOutput.cpp
   src/ui/UI.cpp
   src/ui/ClipGrid.cpp
   src/ui/SliceEditor.cpp

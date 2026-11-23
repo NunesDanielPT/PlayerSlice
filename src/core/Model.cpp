@@ -298,7 +298,7 @@ std::string Project::toJson() const {
     for (auto& s : screens) {
         json sj;
         sj["id"] = s.id; sj["name"] = s.name; sj["device"] = (int)s.device;
-        sj["monitor"] = s.monitorKey; sj["width"] = s.width; sj["height"] = s.height;
+        sj["monitor"] = s.monitorKey; if (!s.ndiName.empty()) sj["ndiName"] = s.ndiName; sj["width"] = s.width; sj["height"] = s.height;
         sj["brightness"] = s.brightness; sj["testPattern"] = s.testPattern; sj["inToggle"] = s.inToggle;
         sj["opacity"] = s.opacity; sj["contrast"] = s.contrast; sj["rgb"] = {s.red, s.green, s.blue};
         sj["guide"] = s.guidePath; sj["guideOpacity"] = s.guideOpacity; sj["locked"] = s.locked;
@@ -406,7 +406,8 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             Screen s;
             get(sj, "id", s.id); get(sj, "name", s.name);
             int d = 0; get(sj, "device", d); s.device = (ScreenDevice)d;
-            get(sj, "monitor", s.monitorKey); get(sj, "width", s.width); get(sj, "height", s.height);
+            get(sj, "monitor", s.monitorKey); get(sj, "ndiName", s.ndiName);
+            if (d < 0 || d > 4) s.device = ScreenDevice::Disabled; get(sj, "width", s.width); get(sj, "height", s.height);
             get(sj, "brightness", s.brightness); get(sj, "testPattern", s.testPattern); get(sj, "inToggle", s.inToggle);
             get(sj, "opacity", s.opacity); get(sj, "contrast", s.contrast);
             if (sj.contains("rgb") && sj["rgb"].size() == 3) { s.red = sj["rgb"][0]; s.green = sj["rgb"][1]; s.blue = sj["rgb"][2]; }

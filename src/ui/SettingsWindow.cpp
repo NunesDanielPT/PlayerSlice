@@ -209,6 +209,15 @@ void sectionHowTo() {
         {"9. Efeitos e OSC", "Arrasta efeitos do painel Efeitos para clips, layers ou para a composição. Para controlar com o Companion, liga a entrada OSC em Definições → OSC e usa os mesmos endereços do Resolume."},
         {"10. Timecode", "Em Definições → Timecode escolhe LTC (cabo de áudio) ou MTC (MIDI). Em cada clip, no painel Clip → Timecode, escolhe Seguir ou Disparar e a hora de início. O painel Timecode (menu Layout) mostra se o sinal está a chegar."},
         {"11. Gravar", "Ctrl+S grava o projeto (.psproj). Há gravação automática a cada 30 s e recuperação depois de um crash."},
+        {"12. Transporte e Trim", "No painel Clip → Transporte vês a timeline do clip: arrasta as pegas para cortar o início (Trim In) e o fim (Trim Out), clica na barra para saltar, e usa Pausa/Play e Recomeçar."},
+        {"13. Copiar definições", "Botão direito num clip → Copiar definições (Ctrl+Shift+C). Seleciona outros clips com Ctrl+clique e Colar definições (Ctrl+Shift+V): repetição, velocidade, encaixe, transformar, efeitos e timecode passam para todos."},
+        {"14. Dissolve", "No painel Composição → Transição entre clips escolhe Dissolve e a duração: ao mudar de coluna ou de clip a imagem nova aparece suavemente. Uma layer com Fade próprio usa o seu."},
+        {"15. Cues", "Menu Layout → Cues. Clica no cabeçalho de uma coluna e em + Cue: cada cue tem um número e aponta para uma coluna de uma stack. GO dispara o seguinte. Outros programas disparam por OSC (/playerslice/cue/go ou /playerslice/cue/N)."},
+        {"16. Frequência das saídas", "Com os fps do projeto definidos (Definições da composição), ao ligar uma saída o monitor passa sozinho para essa frequência (50 fps → 50 Hz). A barra de baixo mostra os fps reais das saídas."},
+        {"17. Clip Time na rede", "No painel Clip Time → Opções liga o link: qualquer pessoa na mesma rede abre o endereço no telemóvel ou tablet e vê o tempo que falta de cada clip."},
+        {"19. Presets de saída", "Na Saída avançada, o botão do topo grava e carrega presets de ecrãs e slices. Importar do Resolume / MapSim lê o .xml do Advanced Output; Exportar para o Resolume cria um .xml que o Resolume abre."},
+        {"20. NDI e saída virtual", "No dispositivo de um ecrã escolhe NDI para o enviar pela rede (instala o NDI Tools) ou Saída virtual para um ecrã que só vês nos monitores."},
+        {"18. Layout", "Menu Layout: mostra ou esconde painéis, abre monitores extra de Programa e Preview, grava e carrega layouts. Os painéis podem ir para outros monitores (nunca para os que estão a ser usados como saída)."},
     };
     for (auto& st : steps) {
         ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s", T(st.title));
@@ -244,6 +253,13 @@ void sectionWhatsNew() {
             "Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.",
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
+        }},
+        {"0.8.0", {
+            "Saída avançada: novos dispositivos NDI (envia o ecrã pela rede para Resolume, vMix, OBS, Pixera...; precisa do NDI Tools) e Saída virtual (ecrã que só existe no PLAYERSLICE).",
+            "Presets de saída como no Resolume: Gravar, Gravar como, Mudar o nome, Apagar, Novo, Mostrar no Explorador, Carregar e lista de presets (Documentos → PLAYERSLICE → Saídas).",
+            "Importar do Resolume / MapSim (.xml): ecrãs e slices com Input Selection e Output (incluindo rodados e com pontos livres). A lista mostra também os presets do Resolume instalados.",
+            "Exportar para o Resolume (.xml): os ecrãs e slices aparecem no Advanced Output do Resolume.",
+            "Novidades com a versão instalada no topo e destacada; Como usar com mais passos.",
         }},
         {"0.7.2", {
             "Painéis de propriedades com cores próprias para não se confundirem: Composição roxo, Layer azul, Coluna âmbar, Clip verde-água (faixa com o nome no topo e cabeçalhos das secções).",
@@ -340,11 +356,44 @@ void sectionWhatsNew() {
             "Saídas por monitor, gravação automática e recuperação depois de um crash.",
         }},
     };
-    for (auto& r : rels) {
-        bool cur = std::string(r.ver) == PLAYERSLICE_VERSION;
-        ImGui::TextColored(cur ? ImVec4(0.25f, 0.88f, 0.75f, 1) : ImVec4(0.75f, 0.75f, 0.78f, 1), "%s %s%s", T("Versão"), r.ver, cur ? T("  (instalada)") : "");
-        for (auto* it : r.items) ImGui::BulletText("%s", T(it));
-        ImGui::Spacing();
+    // mais recente primeiro (independentemente da ordem em que foram escritas)
+    auto key = [](const char* v) { int a = 0, b = 0, c = 0; sscanf(v, "%d.%d.%d", &a, &b, &c); return a * 1000000 + b * 1000 + c; };
+    std::vector<const Rel*> order;
+    for (auto& r : rels) order.push_back(&r);
+    std::stable_sort(order.begin(), order.end(), [&](const Rel* x, const Rel* y) { return key(x->ver) > key(y->ver); });
+    int shown = 0;
+    for (const Rel* r : order) {
+        bool cur = std::string(r->ver) == PLAYERSLICE_VERSION;
+        if (cur) {
+            // versão instalada: caixa destacada
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->ChannelsSplit(2);
+            dl->ChannelsSetCurrent(1);
+            ImVec2 p0 = ImGui::GetCursorScreenPos();
+            ImGui::Indent(10);
+            ImGui::Dummy(ImVec2(0, 4));
+            ImGui::SetWindowFontScale(1.25f);
+            ImGui::TextColored(ImVec4(0.3f, 0.95f, 0.8f, 1), "%s %s", T("Versão"), r->ver);
+            ImGui::SetWindowFontScale(1.f);
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.3f, 0.95f, 0.8f, 1), "%s", T("(instalada — esta é a que estás a usar)"));
+            for (auto* it : r->items) ImGui::BulletText("%s", T(it));
+            ImGui::Dummy(ImVec2(0, 4));
+            ImGui::Unindent(10);
+            ImVec2 p1(p0.x + ImGui::GetContentRegionAvail().x, ImGui::GetCursorScreenPos().y);
+            dl->ChannelsSetCurrent(0);
+            dl->AddRectFilled(p0, p1, IM_COL32(28, 70, 60, 255), 6);
+            dl->AddRect(p0, p1, IM_COL32(64, 224, 192, 255), 6, 0, 1.5f);
+            dl->ChannelsMerge();
+            ImGui::Spacing(); ImGui::Spacing();
+            continue;
+        }
+        std::string hdr = std::string(T("Versão")) + " " + r->ver + "##rel" + r->ver;
+        if (ImGui::TreeNodeEx(hdr.c_str(), shown < 3 ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
+            for (auto* it : r->items) ImGui::BulletText("%s", T(it));
+            ImGui::TreePop();
+        }
+        ++shown;
     }
 }
 

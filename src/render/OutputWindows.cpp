@@ -119,7 +119,7 @@ bool OutputWindows::resize(Win& w) {
 void OutputWindows::sync(const Project& p, const std::vector<DisplayInfo>& displays, const LiveFn& live, bool offBlack) {
     std::set<uint32_t> keep;
     for (const Screen& s : p.screens) {
-        if (s.device == ScreenDevice::Disabled) continue;
+        if (s.device != ScreenDevice::Monitor && s.device != ScreenDevice::Window) continue;   // NDI e virtual: sem janela
         if (!live(s.id) && !offBlack) continue;
         const DisplayInfo* d = nullptr;
         if (s.device == ScreenDevice::Monitor) {
