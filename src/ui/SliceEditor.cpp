@@ -533,7 +533,7 @@ void sliceProps(App& app, Screen& s, Slice& sl) {
     }
     hint(T("Composição = todas as layers misturadas. Layer = só essa layer (dedicar layers a uma saída)."));
 
-    ImGui::TextDisabled("%s", T("Entrada (recorte da composição)"));
+    ImGui::SeparatorText(T("ENTRADA — parte da imagem a usar (píxeis da composição)"));
     if (sl.inWarp) {
         pointsEditor(app, "inpts", sl.inPts);
         if (ImGui::SmallButton(T("Repor retângulo##in"))) { app.checkpoint(); sl.inWarp = false; }
@@ -542,7 +542,7 @@ void sliceProps(App& app, Screen& s, Slice& sl) {
         rectEditor(app, "in", sl.input, (float)p.comp.width, (float)p.comp.height);
     }
 
-    ImGui::TextDisabled("%s", T("Saída (posição no ecrã)"));
+    ImGui::SeparatorText(T("SAÍDA — onde aparece no ecrã (píxeis do ecrã)"));
     if (sl.outWarp) {
         pointsEditor(app, "outpts", sl.outPts);
         if (ImGui::SmallButton(T("Repor retângulo##out"))) { app.checkpoint(); sl.outWarp = false; }
@@ -1037,11 +1037,15 @@ bool rectEditor(App& app, const char* id, Rect& r, float maxW, float maxH) {
     ImGui::PushID(id);
     bool changed = false;
     float xy[2] = {r.x, r.y}, wh[2] = {r.w, r.h};
-    if (ImGui::DragFloat2(T("X / Y"), xy, 1.f, -maxW * 4, maxW * 4, "%.0f")) { r.x = std::round(xy[0]); r.y = std::round(xy[1]); changed = true; }
+    const ImVec4 lab(0.62f, 0.80f, 0.95f, 1);
+    ImGui::TextColored(lab, "%s", T("Posição (canto superior esquerdo)"));
+    if (ImGui::DragFloat2(T("X / Y##pos"), xy, 1.f, -maxW * 4, maxW * 4, "%.0f px")) { r.x = std::round(xy[0]); r.y = std::round(xy[1]); changed = true; }
     undoOnActivate(app);
-    if (ImGui::DragFloat2(T("L / A"), wh, 1.f, 1.f, std::max(maxW, maxH) * 8, "%.0f")) { r.w = std::max(1.f, std::round(wh[0])); r.h = std::max(1.f, std::round(wh[1])); changed = true; }
+    hint(T("Arrasta ou faz duplo clique para escrever (píxeis)."));
+    ImGui::TextColored(lab, "%s", T("Resolução"));
+    if (ImGui::DragFloat2(T("Largura × Altura"), wh, 1.f, 1.f, std::max(maxW, maxH) * 8, "%.0f px")) { r.w = std::max(1.f, std::round(wh[0])); r.h = std::max(1.f, std::round(wh[1])); changed = true; }
     undoOnActivate(app);
-    hint(T("Largura / Altura em píxeis"));
+    hint(T("Largura × altura em píxeis (ex.: 1920 × 1080). Duplo clique para escrever."));
     ImGui::PopID();
     return changed;
 }

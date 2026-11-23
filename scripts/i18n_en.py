@@ -1,6 +1,12 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Posição (canto superior esquerdo)':'Position (top-left corner)','X / Y':'X / Y','Arrasta ou faz duplo clique para escrever (píxeis).':'Drag or double-click to type (pixels).',
+'Resolução':'Resolution','Largura × Altura':'Width × Height',
+'Largura × altura em píxeis (ex.: 1920 × 1080). Duplo clique para escrever.':'Width × height in pixels (e.g. 1920 × 1080). Double-click to type.',
+'ENTRADA — parte da imagem a usar (píxeis da composição)':'INPUT — part of the picture to use (composition pixels)',
+'SAÍDA — onde aparece no ecrã (píxeis do ecrã)':'OUTPUT — where it shows on the screen (screen pixels)',
+'Propriedades da slice mais claras: secções ENTRADA (parte da imagem a usar) e SAÍDA (onde aparece no ecrã), Posição e Resolução com os valores em px (ex.: 1920 px × 1080 px).':'Clearer slice properties: INPUT (part of the picture to use) and OUTPUT (where it shows on the screen) sections, Position and Resolution with values in px (e.g. 1920 px × 1080 px).',
 'Íman':'Magnet',
 'Ao mover ou redimensionar, o vídeo cola às bordas e ao centro da composição e aos outros vídeos no ar (Alt = sem íman).':'When moving or resizing, the video snaps to the composition edges and center and to other live videos (Alt = no snapping).',
 'Íman na moldura do vídeo (Preview e janela grande): ao mover ou redimensionar, cola às bordas e ao centro da composição e às bordas dos outros vídeos no ar (lado a lado), com linhas-guia. Alt = sem íman; botão Íman no monitor.':'Magnet on the video frame (Preview and large window): when moving or resizing, it snaps to the composition edges and center and to other live videos\' edges (side by side), with guide lines. Alt = no magnet; Magnet button on the monitor.',
