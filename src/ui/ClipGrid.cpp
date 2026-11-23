@@ -3,6 +3,8 @@
 //   Ctrl+clique / Shift+clique = selecionar vários; Ctrl+C / Ctrl+V / Ctrl+X / Delete
 //   Arrastar clips entre células, colunas pelo cabeçalho, efeitos do painel Efeitos
 #include "ui/UI.h"
+#include "audio/AudioEngine.h"
+#include "video/VideoPlayer.h"
 #include <functional>
 #include "core/Timecode.h"
 #include "core/I18n.h"
@@ -373,6 +375,12 @@ static void layerHeader(App& app, int li, float rowH) {
     if (l.effects.empty()) ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.62f, 1), "%s  ·  fade %.1fs", blends[(int)l.blend], l.fadeTime);
     else ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.62f, 1), T("%s  ·  fade %.1fs  ·  %d efeito(s)"), blends[(int)l.blend], l.fadeTime, (int)l.effects.size());
 
+    // VU da layer (som que sai desta layer)
+    {
+        VuLevel lv = AudioEngine::get().layerVu(l.id);
+        vuDraw(ImGui::GetWindowDrawList(), ImVec2(p0.x + 8, p0.y + rowH - 12), ImVec2(w - 16, 6), lv.l, lv.r, false);
+        if (l.audioMute) ImGui::GetWindowDrawList()->AddText(ImVec2(p0.x + w - 46, p0.y + 54), IM_COL32(235, 90, 80, 255), T("mudo"));
+    }
     // área inteira: menu de contexto + largar clips, ficheiros e efeitos
     ImGui::SetCursorScreenPos(p0);
     ImGui::InvisibleButton("##ctx", ImVec2(w, rowH - 2), ImGuiButtonFlags_MouseButtonRight);
@@ -512,6 +520,13 @@ static void clipCell(App& app, int li, int ci, float cellW, float cellH) {
     ImU32 border = active ? col::Playing : inPreview ? IM_COL32(240, 170, 40, 255) : sel ? col::Accent : hovered ? IM_COL32(90, 94, 100, 255) : IM_COL32(48, 50, 55, 255);
     dl->AddRect(p0, p1, border, 3, 0, active || sel || inPreview ? 2.f : 1.f);
     if (inPreview) dl->AddText(ImVec2(p0.x + 5, p0.y + 4), IM_COL32(240, 170, 40, 255), "PV");
+    if (active) {
+        // VU do clip no ar (barra fina na lateral direita)
+        if (VideoPlayer* vp = app.comp.activePlayer(l.id)) {
+            VuLevel v = vp->audio()->vu();
+            if (v.l > 1e-4f || v.r > 1e-4f) vuDraw(dl, ImVec2(p1.x - 8, p0.y + 4), ImVec2(5, p1.y - p0.y - 8), v.l, v.r, true);
+        }
+    }
     if (!c.empty() && c.tcMode != TcMode::Off) {
         // etiqueta TC no canto (azul = segue; laranja = dispara)
         const char* tg = "TC";

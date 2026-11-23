@@ -1,6 +1,7 @@
 // Painéis de propriedades (como no Resolume): Composição · Layer · Coluna · Clip
 // e o painel Efeitos (arrastar um efeito para um clip, layer ou composição).
 #include "ui/UI.h"
+#include "audio/AudioEngine.h"
 #include "core/I18n.h"
 #include "app/App.h"
 #include "video/Thumbnail.h"
@@ -131,6 +132,15 @@ static void compositionPanel(App& app) {
     if (ImGui::SmallButton(T("Definições..."))) app.ui.showCompSettings = true;
     if (ImGui::CollapsingHeader(T("Composição##sec"), ImGuiTreeNodeFlags_DefaultOpen))
         param(app, T("Master"), &c.master, 0, 1, 1, "%.2f");
+    if (ImGui::CollapsingHeader(T("Áudio##comp"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        VuLevel mv = AudioEngine::get().masterVu();
+        vuItem(mv.l, mv.r, -1, 12);
+        volumeSlider(app, T("Master de som"), &c.audioVolume);
+        if (ImGui::Checkbox(T("Mudo##master"), &c.audioMute)) { app.checkpoint(); app.markDirty(); }
+        ImGui::SameLine();
+        if (AudioEngine::get().running()) ImGui::TextDisabled("%s · %d Hz", AudioEngine::get().deviceName().c_str(), AudioEngine::get().sampleRate());
+        else ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "%s", T("Placa de som indisponível"));
+    }
     if (ImGui::CollapsingHeader(T("Transição entre clips"), ImGuiTreeNodeFlags_DefaultOpen)) {
         const char* tr[] = {T("Corte"), T("Dissolve")};
         if (ImGui::Combo(T("Tipo##trans"), &c.transition, tr, 2)) { app.checkpoint(); app.markDirty(); }
@@ -162,6 +172,12 @@ static void layerPanel(App& app) {
         param(app, T("Fade (s)"), &l.fadeTime, 0, 10, 0, "%.2f");
         if (ImGui::Checkbox(T("Ignorar disparo de coluna"), &l.ignoreColumn)) app.checkpoint();
         if (ImGui::Checkbox(T("Bloquear conteúdo"), &l.locked)) app.checkpoint();
+    }
+    if (ImGui::CollapsingHeader(T("Áudio##layer"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        VuLevel lv = AudioEngine::get().layerVu(l.id);
+        vuItem(lv.l, lv.r, -1, 12);
+        volumeSlider(app, T("Volume##layer"), &l.volume);
+        if (ImGui::Checkbox(T("Mudo##layer"), &l.audioMute)) { app.checkpoint(); app.markDirty(); }
     }
     if (ImGui::CollapsingHeader(T("Transformar##layer"), ImGuiTreeNodeFlags_DefaultOpen)) {
         param(app, T("Posição X"), &l.posX, -(float)p.comp.width, (float)p.comp.width, 0, "%.0f");
@@ -366,6 +382,18 @@ static void clipPanel(App& app) {
         if (ImGui::Combo(T("Repetição"), &lm, loops, 3)) { app.checkpoint(); c.loop = (LoopMode)lm; }
         param(app, T("Velocidade"), &c.speed, 0, 4, 1, "%.2fx");
         param(app, T("Opacidade"), &c.opacity, 0, 1, 1, "%.2f");
+    }
+    if (ImGui::CollapsingHeader(T("Áudio##clip"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        int chs = th->state == ThumbnailCache::Entry::State::Ready ? th->info.audioChannels : 0;
+        if (chs > 0) ImGui::TextDisabled(T("%s · %d canal(is) · %d Hz"), th->info.audioCodec.c_str(), chs, th->info.audioRate);
+        else ImGui::TextDisabled("%s", T("Este ficheiro não tem som."));
+        VuLevel cv{};
+        if (VideoPlayer* v = app.comp.activePlayer(l.id); v && l.activeColumn == ci) cv = v->audio()->vu();
+        vuItem(cv.l, cv.r, -1, 12);
+        volumeSlider(app, T("Volume##clip"), &c.volume);
+        param(app, T("Pan"), &c.pan, -1, 1, 0, "%.2f");
+        if (ImGui::Checkbox(T("Mudo##clip"), &c.mute)) { app.checkpoint(); app.markDirty(); }
+        if (std::fabs(c.speed - 1.f) > 0.01f) { ImGui::SameLine(); ImGui::TextColored(ImVec4(1, 0.7f, 0.25f, 1), "%s", T("sem som com velocidade diferente de 1x")); }
     }
     if (ImGui::CollapsingHeader(T("Transformar##clip"), ImGuiTreeNodeFlags_DefaultOpen)) clipTransformControls(app, c);
     if (ImGui::CollapsingHeader(T("Timecode##clip"), c.tcMode != TcMode::Off ? ImGuiTreeNodeFlags_DefaultOpen : 0)) clipTimecodeControls(app, c);

@@ -238,6 +238,7 @@ static json clipJ(const Clip& cl) {
         cj["stretch"] = {cl.scaleX, cl.scaleY};
         if (cl.tcMode != TcMode::Off) { cj["tcMode"] = (int)cl.tcMode; cj["tcStart"] = cl.tcStart; }
         if (cl.trimIn > 0 || cl.trimOut > 0) cj["trim"] = {cl.trimIn, cl.trimOut};
+        if (cl.volume != 1.f || cl.pan != 0.f || cl.mute) { cj["volume"] = cl.volume; cj["pan"] = cl.pan; cj["mute"] = cl.mute; }
     }
     return cj;
 }
@@ -269,6 +270,7 @@ std::string Project::toJson() const {
         lj["locked"] = l.locked; lj["fadeTime"] = l.fadeTime;
         lj["useRegion"] = l.useRegion; lj["region"] = rectJ(l.region);
         lj["color"] = l.color; lj["ignoreColumn"] = l.ignoreColumn;
+        lj["volume"] = l.volume; lj["audioMute"] = l.audioMute;
         lj["transform"] = {l.posX, l.posY, l.scale, l.rotation}; lj["effects"] = fxJ(l.effects);
         lj["clips"] = json::array();
         for (auto& cl : l.clips) lj["clips"].push_back(clipJ(cl));
@@ -276,6 +278,7 @@ std::string Project::toJson() const {
     }
     c["activeStack"] = comp.activeStack;
     c["transition"] = comp.transition; c["transitionTime"] = comp.transitionTime;
+    c["audioVolume"] = comp.audioVolume; c["audioMute"] = comp.audioMute;
     c["cues"] = json::array();
     for (auto& q : comp.cues) c["cues"].push_back({{"number", q.number}, {"name", q.name}, {"stack", q.stack}, {"column", q.column}});
     c["stacks"] = json::array();
@@ -341,6 +344,8 @@ static Clip clipFrom(const json& cj) {
         if (cj.contains("effects")) cl.effects = fxFrom(cj["effects"]);
         int tm = 0; get(cj, "tcMode", tm); cl.tcMode = (TcMode)std::clamp(tm, 0, 3);
         get(cj, "tcStart", cl.tcStart);
+        get(cj, "volume", cl.volume); get(cj, "pan", cl.pan); get(cj, "mute", cl.mute);
+        cl.volume = std::clamp(cl.volume, 0.f, 4.f); cl.pan = std::clamp(cl.pan, -1.f, 1.f);
         if (cj.contains("trim") && cj["trim"].size() == 2) { cl.trimIn = std::max(0.0, (double)cj["trim"][0]); cl.trimOut = std::max(0.0, (double)cj["trim"][1]); }
     }
     return cl;
@@ -372,6 +377,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
             get(lj, "fadeTime", l.fadeTime); get(lj, "useRegion", l.useRegion);
             if (lj.contains("region")) l.region = rectFrom(lj["region"]);
             get(lj, "color", l.color); get(lj, "ignoreColumn", l.ignoreColumn);
+            get(lj, "volume", l.volume); get(lj, "audioMute", l.audioMute);
             if (lj.contains("transform") && lj["transform"].size() == 4) {
                 l.posX = lj["transform"][0]; l.posY = lj["transform"][1]; l.scale = lj["transform"][2]; l.rotation = lj["transform"][3];
             }
@@ -395,6 +401,7 @@ bool Project::fromJson(const std::string& text, std::string* err) {
         }
         if (p.comp.stacks.empty()) { p.comp.stacks.push_back(Stack{"Stack 1"}); act = 0; }
         get(c, "transition", p.comp.transition); get(c, "transitionTime", p.comp.transitionTime);
+        get(c, "audioVolume", p.comp.audioVolume); get(c, "audioMute", p.comp.audioMute);
         p.comp.transition = std::clamp(p.comp.transition, 0, 1);
         p.comp.transitionTime = std::clamp(p.comp.transitionTime, 0.f, 30.f);
         for (auto& qj : c.value("cues", json::array())) {

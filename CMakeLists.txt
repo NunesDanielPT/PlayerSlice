@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(PLAYERSLICE VERSION 0.8.5 LANGUAGES C CXX)
+project(PLAYERSLICE VERSION 0.9.0 LANGUAGES C CXX)
 
 # PLAYERSLICE — player de vídeo para ecrãs fora de formato (slices)
 # Criado por Daniel Nunes — github.com/NunesDanielPT
@@ -79,6 +79,7 @@ add_executable(PLAYERSLICE WIN32
   src/render/Compositor.cpp
   src/render/OutputWindows.cpp
   src/render/NdiOutput.cpp
+  src/audio/AudioEngine.cpp
   src/ui/UI.cpp
   src/ui/ClipGrid.cpp
   src/ui/SliceEditor.cpp
@@ -99,13 +100,13 @@ target_compile_definitions(PLAYERSLICE PRIVATE
 if(MSVC)
   target_compile_options(PLAYERSLICE PRIVATE /W3 /utf-8 /MP)
   target_link_directories(PLAYERSLICE PRIVATE ${FFMPEG_DIR}/lib)
-  target_link_libraries(PLAYERSLICE PRIVATE avformat avcodec avutil swscale)
+  target_link_libraries(PLAYERSLICE PRIVATE avformat avcodec avutil swscale swresample)
 else()
   target_compile_options(PLAYERSLICE PRIVATE -Wall -Wno-unknown-pragmas -Wno-missing-field-initializers -municode)
   target_link_options(PLAYERSLICE PRIVATE -municode)
   target_link_libraries(PLAYERSLICE PRIVATE
     ${FFMPEG_DIR}/lib/libavformat.dll.a ${FFMPEG_DIR}/lib/libavcodec.dll.a
-    ${FFMPEG_DIR}/lib/libavutil.dll.a ${FFMPEG_DIR}/lib/libswscale.dll.a
+    ${FFMPEG_DIR}/lib/libavutil.dll.a ${FFMPEG_DIR}/lib/libswscale.dll.a ${FFMPEG_DIR}/lib/libswresample.dll.a
     -static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic)
 endif()
 

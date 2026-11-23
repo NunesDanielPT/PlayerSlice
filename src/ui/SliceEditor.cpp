@@ -7,6 +7,7 @@
 #include "ui/UI.h"
 #include "render/NdiOutput.h"
 #include "core/OutputPreset.h"
+#include <nlohmann/json.hpp>
 #include "core/I18n.h"
 #include "app/App.h"
 #include "core/Log.h"
@@ -1099,6 +1100,7 @@ struct PresetUi {
     char name[128] = "";
     bool askComp = false;        // perguntar se muda o tamanho da composição
     std::string del;             // preset a apagar (à espera de confirmação)
+    bool isErr = false;
     int compW = 0, compH = 0;
     std::string msg;
 } g_pr;
@@ -1107,12 +1109,31 @@ void loadPresetFile(App& app, const std::filesystem::path& f) {
     std::string txt, err;
     if (!readText(f, txt)) { PS_ERROR("%s", T("Não foi possível ler o ficheiro")); return; }
     app.checkpoint();
-    if (!importScreensJson(app.project, txt, &err)) { PS_ERROR("%s: %s", T("Preset inválido"), err.c_str()); return; }
+    std::vector<std::string> created;
+    if (!importScreensJson(app.project, txt, &err, &created)) {
+        PS_ERROR("%s: %s", T("Preset inválido"), err.c_str());
+        g_pr.msg = std::string(T("Preset inválido")) + ": " + err + " " + T("(para ficheiros .xml do Resolume ou do MapSim usa Importar do Resolume / MapSim)");
+        g_pr.isErr = true;
+        return;
+    }
     app.ui.outPreset = toUtf8(f.stem().wstring());
     app.ui.selScreen = app.project.screens.empty() ? 0 : app.project.screens[0].id;
     app.ui.selSlice = 0;
     app.markDirty();
     PS_INFO("%s: %s", T("Preset de saída carregado"), app.ui.outPreset.c_str());
+    int ns = 0; for (auto& s : app.project.screens) ns += (int)s.slices.size();
+    g_pr.isErr = false;
+    g_pr.msg = std::string(T("Preset carregado:")) + " " + std::to_string(app.project.screens.size()) + " " + T("ecrã(s)") + ", " + std::to_string(ns) + " " + T("slice(s).") + " " + T("Escolhe o dispositivo de cada ecrã à direita.");
+    // tamanho da composição do preset
+    try {
+        auto j = nlohmann::json::parse(txt);
+        int w = j["composition"].value("width", 0), h = j["composition"].value("height", 0);
+        if (w > 0 && h > 0 && (w != app.project.comp.width || h != app.project.comp.height)) { g_pr.askComp = true; g_pr.compW = w; g_pr.compH = h; }
+    } catch (...) {}
+    if (!created.empty()) {
+        g_pr.msg += std::string(" ") + T("Layers criadas para as slices dedicadas:");
+        for (size_t i = 0; i < created.size(); ++i) g_pr.msg += (i ? ", " : " ") + created[i];
+    }
 }
 
 bool savePreset(App& app, const std::string& name) {
@@ -1126,9 +1147,14 @@ bool savePreset(App& app, const std::string& name) {
 
 void importResolume(App& app, const std::filesystem::path& f) {
     std::string txt, err;
-    if (!readText(f, txt)) { PS_ERROR("%s", T("Não foi possível ler o ficheiro")); return; }
+    if (!readText(f, txt)) { PS_ERROR("%s", T("Não foi possível ler o ficheiro")); g_pr.msg = T("Não foi possível ler o ficheiro"); g_pr.isErr = true; return; }
     ResolumeImport r;
-    if (!importResolumeXml(txt, app.project, r, &err)) { PS_ERROR("%s: %s", T("Importar do Resolume"), err.c_str()); return; }
+    if (!importResolumeXml(txt, app.project, r, &err)) {
+        PS_ERROR("%s: %s", T("Importar do Resolume"), err.c_str());
+        g_pr.msg = std::string(T("Não foi possível importar:")) + " " + err;
+        g_pr.isErr = true;
+        return;
+    }
     app.checkpoint();
     app.project.screens = std::move(r.screens);
     app.ui.selScreen = app.project.screens[0].id;
@@ -1136,6 +1162,7 @@ void importResolume(App& app, const std::filesystem::path& f) {
     app.ui.outPreset = toUtf8(f.stem().wstring());
     app.markDirty();
     int ns = 0; for (auto& s : app.project.screens) ns += (int)s.slices.size();
+    g_pr.isErr = false;
     g_pr.msg = std::string(T("Importado do Resolume:")) + " " + std::to_string(app.project.screens.size()) + " " + T("ecrã(s)") + ", " + std::to_string(ns) + " " + T("slice(s).");
     if (r.warpedSlices) g_pr.msg += std::string(" ") + std::to_string(r.warpedSlices) + " " + T("slice(s) tinham curvas na grelha de warp; foram aproximadas pelos 4 cantos.");
     if (r.maskedSlices) g_pr.msg += std::string(" ") + std::to_string(r.maskedSlices) + " " + T("máscara(s)/polígono(s) ignorados.");
@@ -1172,13 +1199,21 @@ static void presetBar(App& app) {
         }
         if (ImGui::MenuItem(T("Mostrar no Explorador"))) ShellExecuteW(nullptr, L"open", presetDir().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         if (ImGui::MenuItem(T("Carregar ficheiro..."))) {
-            std::string f = fileDialog(app.hwnd(), false, L"PLAYERSLICE (*.psout)", L"*.psout", L"psout", presetDir().wstring());
-            if (!f.empty()) loadPresetFile(app, std::filesystem::path(fromUtf8(f)));
+            std::string f = fileDialog(app.hwnd(), false, L"PLAYERSLICE / Resolume / MapSim (*.psout;*.xml)", L"*.psout;*.xml", L"psout", presetDir().wstring());
+            if (!f.empty()) {
+                std::filesystem::path fp(fromUtf8(f));
+                if (_wcsicmp(fp.extension().c_str(), L".xml") == 0) importResolume(app, fp);
+                else loadPresetFile(app, fp);
+            }
         }
         ImGui::Separator();
-        if (ImGui::MenuItem(T("Importar do Resolume / MapSim (.xml)..."))) {
-            std::string f = fileDialog(app.hwnd(), false, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", documentsDir().wstring());
-            if (!f.empty()) importResolume(app, std::filesystem::path(fromUtf8(f)));
+        if (ImGui::MenuItem(T("Importar do Resolume / MapSim (.xml, .psout)..."))) {
+            std::string f = fileDialog(app.hwnd(), false, L"Resolume / MapSim / PLAYERSLICE (*.xml;*.psout)", L"*.xml;*.psout", L"xml", documentsDir().wstring());
+            if (!f.empty()) {
+                std::filesystem::path fp(fromUtf8(f));
+                if (_wcsicmp(fp.extension().c_str(), L".psout") == 0) loadPresetFile(app, fp);
+                else importResolume(app, fp);
+            }
         }
         if (ImGui::MenuItem(T("Exportar para o Resolume (.xml)..."))) {
             std::wstring nm = fromUtf8(app.ui.outPreset.empty() ? std::string("PLAYERSLICE") : app.ui.outPreset);
@@ -1264,7 +1299,7 @@ static void presetBar(App& app) {
         ImGui::EndPopup();
     }
     if (!g_pr.msg.empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.85f, 0.75f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Text, g_pr.isErr ? ImVec4(1, 0.45f, 0.4f, 1) : ImVec4(0.45f, 0.85f, 0.75f, 1));
         ImGui::TextWrapped("%s", g_pr.msg.c_str());
         ImGui::PopStyleColor();
         if (ImGui::SmallButton(T("OK##prmsg"))) g_pr.msg.clear();

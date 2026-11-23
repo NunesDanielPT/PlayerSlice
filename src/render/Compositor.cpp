@@ -1,5 +1,6 @@
 #include "render/Compositor.h"
 #include "core/Timecode.h"
+#include "audio/AudioEngine.h"
 #include "core/Log.h"
 #include "core/Geometry.h"
 #include "core/Effects.h"
@@ -173,6 +174,7 @@ void Compositor::remapColumns(Project& p, const std::function<int(int)>& map) {
 
 void Compositor::update(Project& p, double now) {
     m_now = now;
+    AudioEngine::get().setMaster(p.comp.audioVolume, p.comp.audioMute);
     // limpar runtimes de layers apagadas
     std::set<uint32_t> ids;
     for (auto& l : p.comp.layers) ids.insert(l.id);
@@ -196,6 +198,7 @@ void Compositor::update(Project& p, double now) {
                 m_prevClip = c;
             }
             if (tcFollows(m_prevClip.tcMode)) { TcStatus ts = Timecode::get().status(); if (ts.valid) m_prev->chase((ts.seconds - m_prevClip.tcStart) * m_prevClip.speed); }
+            m_prev->audio()->setMix(0, 0, 0, false);   // o preview não sai no som
             m_prev->update(now);
         }
     }
@@ -218,6 +221,18 @@ void Compositor::update(Project& p, double now) {
         }
         if (rt.cur) rt.cur->update(now);
         if (rt.prev) rt.prev->update(now);
+        // som: clip × layer × fade (o master é aplicado no AudioEngine)
+        {
+            bool anySolo = false;
+            for (auto& o : p.comp.layers) if (o.solo) { anySolo = true; break; }
+            bool vis = !l.bypass && (!anySolo || l.solo) && !l.audioMute;
+            float k = 1.f;
+            if (rt.prev && rt.fadeStart >= 0 && rt.fadeDur > 0) k = std::clamp(float((now - rt.fadeStart) / rt.fadeDur), 0.f, 1.f);
+            else if (rt.prev && rt.fadeStart < 0) k = 0.f;
+            float lg = vis ? l.volume : 0.f;
+            if (rt.cur) rt.cur->audio()->setMix(lg * (rt.curClip.mute ? 0.f : rt.curClip.volume) * k, rt.curClip.pan, l.id, true);
+            if (rt.prev) rt.prev->audio()->setMix(lg * (rt.prevClip.mute ? 0.f : rt.prevClip.volume) * (1.f - k), rt.prevClip.pan, l.id, true);
+        }
 
         if (rt.cur && rt.fadeStart < 0 && (rt.cur->hasFrame() || rt.cur->state() == VideoPlayer::State::Error))
             rt.fadeStart = now;

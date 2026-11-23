@@ -28,6 +28,9 @@ struct MediaInfo {
     int width = 0, height = 0;
     double fps = 0, duration = 0;
     std::string codec;          // ex. "HAP Q", "H.264 (GPU)", "ProRes (CPU)"
+    int audioChannels = 0;      // 0 = sem som
+    int audioRate = 0;
+    std::string audioCodec;
 };
 
 // Um clip em reprodução. Thread de descodificação própria + fila de frames.
@@ -57,6 +60,8 @@ public:
     double trimIn() const { return m_in.load(); }
     double trimLength() const;            // duração entre Trim In e Trim Out
     bool chasing() const { return m_chase; }
+    // som do clip (sempre existe; fica em silêncio se o ficheiro não tiver áudio)
+    const std::shared_ptr<class AudioSource>& audio() const { return m_audio; }
     void setSpeed(float s);
     void setLoop(LoopMode m) { m_loop.store(m); }
 
@@ -131,6 +136,8 @@ private:
     // render thread
     bool   m_started = false;
     bool   m_chase = false;
+    double m_lastChaseT = -1;
+    std::shared_ptr<class AudioSource> m_audio;
     bool   m_paused = false;
     double m_chaseT = 0;
     double m_seekSentT = -1;     // último salto pedido (render thread)

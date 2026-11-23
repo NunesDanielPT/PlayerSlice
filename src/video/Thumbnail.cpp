@@ -35,6 +35,15 @@ static void generate(const std::string& path, ThumbnailCache::Entry& e) {
         const AVCodecDescriptor* d = avcodec_descriptor_get(st->codecpar->codec_id);
         e.info.codec = d ? d->name : "?";
         if (st->codecpar->codec_id == AV_CODEC_ID_HAP) e.info.codec = "hap";
+        {
+            int as = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, vs, nullptr, 0);
+            if (as >= 0) {
+                e.info.audioChannels = fmt->streams[as]->codecpar->ch_layout.nb_channels;
+                e.info.audioRate = fmt->streams[as]->codecpar->sample_rate;
+                const AVCodecDescriptor* ad = avcodec_descriptor_get(fmt->streams[as]->codecpar->codec_id);
+                e.info.audioCodec = ad ? ad->name : "?";
+            }
+        }
 
         const AVCodec* c = avcodec_find_decoder(st->codecpar->codec_id);
         if (!c) break;

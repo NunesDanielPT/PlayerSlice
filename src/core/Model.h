@@ -52,6 +52,10 @@ struct Clip {
     double      tcStart = 0;       // segundos de timecode em que o clip começa
     double      trimIn = 0;        // segundos do ficheiro (Trim In)
     double      trimOut = 0;       // 0 = até ao fim
+    // som
+    float       volume = 1.0f;     // ganho linear (1 = 0 dB, 2 = +6 dB)
+    float       pan = 0.0f;        // -1 esquerda .. 1 direita
+    bool        mute = false;
     bool empty() const { return path.empty(); }
 };
 
@@ -81,6 +85,8 @@ struct Layer {
     float       fadeTime = 0.0f;    // crossfade entre clips (s)
     uint32_t    color = 0;          // cor da layer na grelha (0 = sem cor)
     bool        ignoreColumn = false; // não reage ao disparo de colunas
+    float       volume = 1.0f;      // som da layer
+    bool        audioMute = false;
     // transformação da layer inteira
     float       posX = 0, posY = 0, scale = 1.0f, rotation = 0.0f;
     std::vector<Effect> effects;
@@ -113,6 +119,8 @@ struct Composition {
     std::vector<Stack> stacks{Stack{"Stack 1"}};
     int activeStack = 0;
     // transição entre clips (crossfader da composição); a layer pode ter o seu próprio fade
+    float audioVolume = 1.0f;       // master de som
+    bool  audioMute = false;
     int   transition = 0;           // 0 corte, 1 dissolve
     float transitionTime = 0.5f;    // segundos
     std::vector<Cue> cues;

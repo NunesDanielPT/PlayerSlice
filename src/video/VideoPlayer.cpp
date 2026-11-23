@@ -2,6 +2,7 @@
 #include "core/Log.h"
 #include "core/ThreadPool.h"
 #include "core/Settings.h"
+#include "audio/AudioEngine.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -11,6 +12,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
 #include <hap.h>
 #include <algorithm>
@@ -127,10 +129,12 @@ VideoPlayer::VideoPlayer(const std::string& pathUtf8, LoopMode loop, float speed
     m_in = std::max(0.0, trimIn);
     m_out = trimOut > 0 ? std::max(trimOut, m_in.load() + 0.04) : 0.0;
     m_maxQueue = (size_t)std::clamp(settings().decodeBuffer, 3, 16);
+    m_audio = AudioEngine::get().createSource();
     m_thread = std::thread([this] { threadMain(); });
 }
 
 VideoPlayer::~VideoPlayer() {
+    if (m_audio) m_audio->setMix(0, 0, 0, false);   // calar já
     m_stop = true;
     m_cv.notify_all();
     if (m_thread.joinable()) m_thread.join();
@@ -264,7 +268,13 @@ struct FFGuard {
     AVPacket* pkt = nullptr;
     AVFrame* fr = nullptr;
     SwsContext* sws = nullptr;
+    AVCodecContext* adec = nullptr;
+    SwrContext* swr = nullptr;
+    AVFrame* afr = nullptr;
     ~FFGuard() {
+        if (swr) swr_free(&swr);
+        if (afr) av_frame_free(&afr);
+        if (adec) avcodec_free_context(&adec);
         if (sws) sws_free_context(&sws);
         if (fr) av_frame_free(&fr);
         if (pkt) av_packet_free(&pkt);
@@ -284,8 +294,34 @@ bool VideoPlayer::openAndRun() {
 
     int vs = av_find_best_stream(g.fmt, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     if (vs < 0) { fail("O ficheiro não tem vídeo"); return false; }
+    // som: a faixa de áudio principal (se a placa de som estiver a funcionar)
+    int as = av_find_best_stream(g.fmt, AVMEDIA_TYPE_AUDIO, -1, vs, nullptr, 0);
+    int outRate = AudioEngine::get().sampleRate();
+    if (as >= 0) {
+        AVCodecParameters* ap = g.fmt->streams[as]->codecpar;
+        const AVCodec* acodec = avcodec_find_decoder(ap->codec_id);
+        bool ok = acodec != nullptr;
+        if (ok) { g.adec = avcodec_alloc_context3(acodec); ok = g.adec && avcodec_parameters_to_context(g.adec, ap) >= 0; }
+        if (ok) { g.adec->thread_count = 1; ok = avcodec_open2(g.adec, acodec, nullptr) >= 0; }
+        if (ok) {
+            AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
+            ok = swr_alloc_set_opts2(&g.swr, &stereo, AV_SAMPLE_FMT_FLT, outRate, &g.adec->ch_layout, g.adec->sample_fmt, g.adec->sample_rate, 0, nullptr) >= 0 &&
+                 swr_init(g.swr) >= 0;
+        }
+        if (ok) {
+            g.afr = av_frame_alloc();
+            m_audio->m_rate = outRate;
+            std::lock_guard<std::mutex> lk(m_mtx);
+            m_info.audioChannels = g.adec->ch_layout.nb_channels;
+            m_info.audioRate = g.adec->sample_rate;
+            m_info.audioCodec = acodec->long_name ? acodec->long_name : acodec->name;
+        } else {
+            PS_WARN("Som não suportado em %s", m_path.c_str());
+            as = -1;
+        }
+    }
     for (unsigned i = 0; i < g.fmt->nb_streams; ++i)
-        if ((int)i != vs) g.fmt->streams[i]->discard = AVDISCARD_ALL;
+        if ((int)i != vs && (int)i != as) g.fmt->streams[i]->discard = AVDISCARD_ALL;
 
     AVStream* st = g.fmt->streams[vs];
     AVCodecParameters* par = st->codecpar;
@@ -374,6 +410,33 @@ bool VideoPlayer::openAndRun() {
         return out > 0 && rel + m_in.load() >= out - frameDur * 0.25;
     };
 
+    const double vStart = startPts * av_q2d(tb);
+    const AVRational atb = as >= 0 ? g.fmt->streams[as]->time_base : AVRational{1, 1};
+    std::vector<float> abuf;
+    double aNext = 0;
+    auto audioPacket = [&](AVPacket* pk) {
+        if (!g.adec) return;
+        if (avcodec_send_packet(g.adec, pk) < 0) return;
+        while (avcodec_receive_frame(g.adec, g.afr) >= 0) {
+            double rel = g.afr->best_effort_timestamp != AV_NOPTS_VALUE ? g.afr->best_effort_timestamp * av_q2d(atb) - vStart - m_in.load() : aNext;
+            aNext = rel + (double)g.afr->nb_samples / std::max(1, g.afr->sample_rate);
+            double out = m_out.load();
+            bool keep = rel >= -0.5 && !(out > 0 && rel + m_in.load() >= out);
+            if (keep) {
+                int maxOut = swr_get_out_samples(g.swr, g.afr->nb_samples) + 32;
+                abuf.resize((size_t)maxOut * 2);
+                uint8_t* outp[1] = {(uint8_t*)abuf.data()};
+                int n = swr_convert(g.swr, outp, maxOut, (const uint8_t**)g.afr->extended_data, g.afr->nb_samples);
+                if (n > 0) m_audio->push(rel + loopOffset, abuf.data(), n);
+            }
+            av_frame_unref(g.afr);
+        }
+    };
+    auto audioReset = [&](bool clearChunks) {
+        if (g.adec) avcodec_flush_buffers(g.adec);
+        if (clearChunks) m_audio->clear();
+    };
+
     auto clearQueue = [&] {
         std::deque<std::unique_ptr<Frame>> old;
         { std::lock_guard<std::mutex> lk(m_mtx); old.swap(m_queue); }
@@ -384,6 +447,7 @@ bool VideoPlayer::openAndRun() {
         double in = m_in.load();
         av_seek_frame(g.fmt, vs, startPts + (int64_t)(in / av_q2d(tb)), AVSEEK_FLAG_BACKWARD);
         if (g.dec) avcodec_flush_buffers(g.dec);
+        audioReset(false);
         hitOut = false;
     };
 
@@ -463,6 +527,7 @@ bool VideoPlayer::openAndRun() {
             m_eof = false; firstPushed = false;
             m_playhead = 0;
             seekTarget = -1;
+            audioReset(true);
         }
         if (m_seekReq.exchange(false)) {
             gen = m_gen.load();
@@ -481,6 +546,7 @@ bool VideoPlayer::openAndRun() {
             m_eof = false; firstPushed = false;
             seekTarget = t;
             m_playhead = t;
+            audioReset(true);
         }
 
         // fila cheia → esperar (sem ocupar CPU)
@@ -514,6 +580,7 @@ bool VideoPlayer::openAndRun() {
             Sleep(2);
             continue;
         }
+        if (g.pkt->stream_index == as) { audioPacket(g.pkt); av_packet_unref(g.pkt); continue; }
         if (g.pkt->stream_index != vs) { av_packet_unref(g.pkt); continue; }
 
         if (isHap) {
@@ -621,6 +688,9 @@ void VideoPlayer::update(double now) {
             if (!show && !m_hasFrame && !m_queue.empty()) { show = std::move(m_queue.front()); m_queue.pop_front(); }
             m_playhead = target;
             m_started = true;
+            bool moving = m_lastChaseT >= 0 && std::fabs(target - m_lastChaseT) > 1e-6;
+            m_lastChaseT = target;
+            m_audio->setClock(target, now, 1.0, moving && m_state.load() == State::Playing);
         } else {
         if (!m_started) {
             if (m_queue.empty()) return;
@@ -644,6 +714,7 @@ void VideoPlayer::update(double now) {
             m_queue.pop_front();
         }
         m_playhead = playhead;
+        m_audio->setClock(playhead, now, m_paused ? 0.0 : speed, m_started && !m_paused && m_state.load() == State::Playing);
         }
     }
     m_cv.notify_all();

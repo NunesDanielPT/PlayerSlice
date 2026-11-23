@@ -35,7 +35,7 @@ std::string exportScreensJson(const Project& p) {
     return o.dump(2);
 }
 
-bool importScreensJson(Project& p, const std::string& text, std::string* err) {
+bool importScreensJson(Project& p, const std::string& text, std::string* err, std::vector<std::string>* createdLayers) {
     try {
         json o = json::parse(text);
         if (o.value("type", "") != "output-preset" || !o.contains("screens")) { if (err) *err = "Não é um preset de saída do PLAYERSLICE"; return false; }
@@ -57,7 +57,15 @@ bool importScreensJson(Project& p, const std::string& text, std::string* err) {
                 if (sl.sourceLayer && p.layerIndex(sl.sourceLayer) < 0) {
                     uint32_t found = 0;
                     auto it = names.find(sl.sourceLayer);
-                    if (it != names.end()) for (auto& l : p.comp.layers) if (l.name == it->second) { found = l.id; break; }
+                    if (it != names.end()) {
+                        for (auto& l : p.comp.layers) if (l.name == it->second) { found = l.id; break; }
+                        if (!found && !it->second.empty()) {
+                            // não existe: criar a layer dedicada com esse nome (fica por baixo das existentes)
+                            Layer& nl = p.insertLayer((int)p.comp.layers.size(), it->second);
+                            found = nl.id;
+                            if (createdLayers) createdLayers->push_back(it->second);
+                        }
+                    }
                     sl.sourceLayer = found;
                 }
             }
@@ -180,8 +188,25 @@ std::string paramValue(const XNode* params, const char* name) {
 bool near(float a, float b) { return std::fabs(a - b) < 0.01f; }
 } // namespace
 
-bool importResolumeXml(const std::string& xml, Project& ids, ResolumeImport& out, std::string* err) {
+static std::string normalizeXmlText(const std::string& in) {
+    // UTF-16 (Bloco de Notas antigo) → UTF-8 simples; tirar BOM
+    if (in.size() >= 2 && (unsigned char)in[0] == 0xFF && (unsigned char)in[1] == 0xFE) {
+        std::string o;
+        for (size_t i = 2; i + 1 < in.size(); i += 2) {
+            unsigned c = (unsigned char)in[i] | ((unsigned char)in[i + 1] << 8);
+            if (c < 0x80) o += (char)c;
+            else if (c < 0x800) { o += (char)(0xC0 | (c >> 6)); o += (char)(0x80 | (c & 0x3F)); }
+            else { o += (char)(0xE0 | (c >> 12)); o += (char)(0x80 | ((c >> 6) & 0x3F)); o += (char)(0x80 | (c & 0x3F)); }
+        }
+        return o;
+    }
+    if (in.size() >= 3 && (unsigned char)in[0] == 0xEF && (unsigned char)in[1] == 0xBB && (unsigned char)in[2] == 0xBF) return in.substr(3);
+    return in;
+}
+
+bool importResolumeXml(const std::string& xmlIn, Project& ids, ResolumeImport& out, std::string* err) {
     try {
+        const std::string xml = normalizeXmlText(xmlIn);
         XParser ps(xml);
         auto root = ps.element(0);
         const XNode* setup = root->name == "ScreenSetup" ? root.get() : root->child("ScreenSetup");
@@ -238,6 +263,17 @@ bool importResolumeXml(const std::string& xml, Project& ids, ResolumeImport& out
                                 }
                                 if (dev > 3.f) out.warpedSlices++;
                             }
+                        }
+                        if (have) {
+                            // grelha "neutra": os mesmos 4 cantos do OutputRect (o MapSim roda a saída só pela ordem
+                            // dos vértices do OutputRect) → manter o OutputRect, que tem a orientação certa
+                            bool sameSet = true;
+                            for (int k = 0; k < 4 && sameSet; ++k) {
+                                bool f = false;
+                                for (int j = 0; j < 4; ++j) if (std::fabs(qw[k][0] - qo[j][0]) < 0.5f && std::fabs(qw[k][1] - qo[j][1]) < 0.5f) f = true;
+                                sameSet = f;
+                            }
+                            if (sameSet) have = false;
                         }
                         if (!have) for (int k = 0; k < 4; ++k) { qw[k][0] = qo[k][0]; qw[k][1] = qo[k][1]; }
                         // homografia (perspetiva) aplicada por cima

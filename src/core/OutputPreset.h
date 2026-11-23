@@ -10,7 +10,8 @@ namespace ps {
 
 std::string exportScreensJson(const Project& p);
 // substitui os ecrãs do projeto; ids novos; sourceLayer validado contra as layers do projeto
-bool importScreensJson(Project& p, const std::string& text, std::string* err);
+// createdLayers: layers dedicadas que não existiam e foram criadas (ligadas pelo nome)
+bool importScreensJson(Project& p, const std::string& text, std::string* err, std::vector<std::string>* createdLayers = nullptr);
 
 struct ResolumeImport {
     std::vector<Screen> screens;

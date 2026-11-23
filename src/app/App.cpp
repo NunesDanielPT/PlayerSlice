@@ -4,6 +4,7 @@
 #include "core/I18n.h"
 #include "core/Timecode.h"
 #include "render/NdiOutput.h"
+#include "audio/AudioEngine.h"
 #include "core/Settings.h"
 #include "core/Updater.h"
 #include "core/Osc.h"
@@ -562,6 +563,7 @@ void App::handleOsc() {
             else if (a[1] == "connectnextcolumn") { if (press) stepColumn(+1); }
             else if (a[1] == "connectprevcolumn") { if (press) stepColumn(-1); }
             else if (a[1] == "master") p.comp.master = std::clamp(v, 0.f, 1.f);
+            else if (a[1] == "audio" && a.size() >= 3 && a[2] == "volume") p.comp.audioVolume = std::clamp(v, 0.f, 2.f);
             else if (a[1] == "decks" && a.size() >= 4 && a[3] == "select") { if (press) selectStack(num(2) - 1); }
             else if (a[1] == "selectnextdeck") { if (press) selectStack(p.comp.activeStack + 1); }
             else if (a[1] == "selectprevdeck") { if (press) selectStack(p.comp.activeStack - 1); }
@@ -593,6 +595,7 @@ void App::handleOsc() {
                     if (rest == "connect" && press) comp.trigger(p, li, c);
                     else if (rest == "select" && press) comp.previewClip(p, li, c);
                     else if (rest == "video/opacity") cl.opacity = std::clamp(v, 0.f, 1.f);
+                    else if (rest == "audio/volume") cl.volume = std::clamp(v, 0.f, 2.f);
                     else if (rest == "transport/position" && l.activeColumn == c) {
                         // saltar para uma posição (0..1) no clip que está no ar
                         if (VideoPlayer* vp = comp.activePlayer(l.id)) vp->seek(std::clamp(v, 0.f, 1.f) * vp->trimLength());
@@ -603,6 +606,7 @@ void App::handleOsc() {
                     if (VideoPlayer* vp = comp.activePlayer(l.id)) vp->setPaused((int)std::lround(v) == 1);
                 }
                 else if (a[3] == "select" && press) ui.selLayer = li;
+                else if (a[3] == "audio" && a.size() >= 5 && a[4] == "volume") l.volume = std::clamp(v, 0.f, 2.f);
                 else if ((a[3] == "video" && a.size() >= 5 && a[4] == "opacity") || a[3] == "master") l.opacity = std::clamp(v, 0.f, 1.f);
                 else if (a[3] == "bypassed") l.bypass = toggle ? !l.bypass : press;
                 else if (a[3] == "solo") l.solo = toggle ? !l.solo : press;
@@ -1000,6 +1004,7 @@ int App::run(HINSTANCE inst) {
     loadUiState(*this);
     applyOsc();
     applyTimecode();
+    AudioEngine::get().start(settings().audioDevice);
     WebServer::get().configure(settings().webEnabled, settings().webPort);
 
     // recuperar trabalho depois de um crash
@@ -1040,6 +1045,7 @@ int App::run(HINSTANCE inst) {
     Osc::get().shutdown();
     Timecode::get().shutdown();
     NdiOutputs::get().shutdown();
+    AudioEngine::get().shutdown();
     WebServer::get().shutdown();
     outputs.closeAll();
     comp.stopAll(project);

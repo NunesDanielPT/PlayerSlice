@@ -46,6 +46,11 @@ void  undoOnActivate(App& app);
 // valor numérico estilo Resolume: arrastar para mudar, duplo clique (ou Ctrl+clique) para escrever,
 // botão direito para repor o valor por defeito. Barra fina em baixo mostra a posição.
 bool  valueSlider(App& app, const char* label, float* v, float lo, float hi, float def, const char* fmt);
+// VU (L/R) de -60 a +6 dB; desenha num retângulo (sem ocupar espaço) ou como item (vuItem)
+void  vuDraw(ImDrawList* dl, ImVec2 p0, ImVec2 size, float l, float r, bool vertical);
+void  vuItem(float l, float r, float width, float height = 10.f);
+// volume em dB (−60 = mudo … +12) sobre um ganho linear
+bool  volumeSlider(App& app, const char* label, float* gain);
 
 namespace col {
     constexpr ImU32 Accent     = IM_COL32(64, 224, 192, 255);   // turquesa

@@ -1,5 +1,6 @@
 // Janela de Definições: Geral · Placa gráfica · Rede · Som · Atalhos · Sobre
 #include "ui/UI.h"
+#include "audio/AudioEngine.h"
 #include "app/App.h"
 #include "core/I18n.h"
 #include "core/Log.h"
@@ -90,13 +91,23 @@ void sectionNetwork() {
 void sectionAudio() {
     Settings& s = settings();
     ImGui::SeparatorText(T("Placa de som"));
-    ImGui::TextWrapped("%s", T("Saída de áudio dos clips. A reprodução de som está em desenvolvimento; a escolha fica já guardada."));
+    ImGui::TextWrapped("%s", T("Saída do som dos clips no ar (o Preview não sai no som). Volume e mudo por clip, por layer e master nos painéis de propriedades."));
     ImGui::Spacing();
-    if (ImGui::RadioButton(T("Predefinida do Windows"), s.audioDevice.empty())) { s.audioDevice.clear(); s.audioName.clear(); save(); }
+    bool ch = false;
+    if (ImGui::RadioButton(T("Predefinida do Windows"), s.audioDevice.empty())) { s.audioDevice.clear(); s.audioName.clear(); ch = true; }
     for (auto& a : g_audio) {
         std::string lbl = a.name + (a.isDefault ? std::string("  (") + T("predefinida") + ")" : "") + "##" + a.id;
-        if (ImGui::RadioButton(lbl.c_str(), s.audioDevice == a.id)) { s.audioDevice = a.id; s.audioName = a.name; save(); }
+        if (ImGui::RadioButton(lbl.c_str(), s.audioDevice == a.id)) { s.audioDevice = a.id; s.audioName = a.name; ch = true; }
     }
+    if (ch) { save(); AudioEngine::get().start(s.audioDevice); }
+    ImGui::Spacing();
+    ImGui::SeparatorText(T("Estado"));
+    AudioEngine& ae = AudioEngine::get();
+    if (ae.running()) ImGui::TextColored(ImVec4(0.35f, 0.9f, 0.5f, 1), "● %s · %d Hz", ae.deviceName().c_str(), ae.sampleRate());
+    else ImGui::TextColored(ImVec4(1, 0.5f, 0.35f, 1), "● %s %s", T("Indisponível:"), ae.error().c_str());
+    VuLevel mv = ae.masterVu();
+    vuItem(mv.l, mv.r, 300, 12);
+    ImGui::TextDisabled("%s", T("Nota: clips com velocidade diferente de 1x tocam sem som."));
 }
 
 void sectionOsc(App& app) {
@@ -129,6 +140,28 @@ void sectionOsc(App& app) {
     s.oscOutPort = std::clamp(s.oscOutPort, 1, 65535);
     if (ch) { app.applyOsc(); save(); }
 
+    if (ImGui::CollapsingHeader(T("Companion: como ligar e pôr os botões"), ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s", T("1. Ligar"));
+        ImGui::BulletText("%s", T("No Companion: Add Connection → Resolume: Arena."));
+        ImGui::BulletText("%s", T("Resolume Host IP = o IP deste PC (acima). Se o Companion estiver neste PC também podes usar 127.0.0.1."));
+        ImGui::BulletText("%s", T("Use REST / WebSocket API: desligado."));
+        ImGui::BulletText("%s", T("OSC Send Port = a Porta de entrada aqui (7000). Enable OSC Listener: ligado. OSC Receive Port = a Porta de saída aqui (7001)."));
+        ImGui::BulletText("%s", T("Aqui: liga Entrada OSC e Saída OSC; Endereço de saída = IP do PC do Companion (127.0.0.1 se for o mesmo PC)."));
+        ImGui::BulletText("%s", T("A ligação fica verde (OK) e o Monitor em baixo mostra as perguntas do Companion a chegar."));
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.25f, 0.88f, 0.75f, 1), "%s", T("2. Pôr os botões"));
+        ImGui::BulletText("%s", T("Usa só as ações que começam por «OSC:» — as outras (Select Column, Connect Column...) precisam da API REST do Resolume e não fazem nada aqui."));
+        ImGui::BulletText("%s", T("Em Add action escreve OSC: e escolhe:"));
+        ImGui::Indent();
+        ImGui::BulletText("%s", T("OSC: Next Column → põe no ar a coluna seguinte"));
+        ImGui::BulletText("%s", T("OSC: Previous Column → a coluna anterior"));
+        ImGui::BulletText("%s", T("OSC: Trigger Column (com o número) → põe essa coluna no ar"));
+        ImGui::BulletText("%s", T("OSC: Connect Clip (Play) → um clip de uma layer (layer 1 = a de baixo)"));
+        ImGui::BulletText("%s", T("OSC: Clear All Layers → parar tudo; OSC: Clip Pause / Resume; OSC: Layer Next/Previous Clip"));
+        ImGui::BulletText("%s", T("Para cues: Custom OSC com /playerslice/cue/go ou /playerslice/cue/N"));
+        ImGui::Unindent();
+        ImGui::Spacing();
+    }
     ImGui::SeparatorText(T("Endereços"));
     ImGui::TextDisabled("%s", T("Layer 1 = a de baixo (como no Resolume). Colunas e clips contam a partir de 1."));
     const char* rows[][2] = {
@@ -141,6 +174,8 @@ void sectionOsc(App& app) {
         {"/composition/layers/L/connectnextclip | connectprevclip", T("Clip seguinte / anterior na layer L")},
         {"/composition/layers/L/direction  (1 = pausa, 2 = play)", T("Pausa / play da layer")},
         {"/composition/layers/L/clips/C/transport/position  (0..1)", T("Saltar para uma posição do clip no ar")},
+        {"/composition/audio/volume  (0..1)", T("Volume master do som")},
+        {"/composition/layers/L/audio/volume  (0..1)", T("Volume do som da layer")},
         {"/composition/decks/N/select", T("Mostrar a stack N")},
         {"/playerslice/cue/go | back", T("Cue seguinte / anterior")},
         {"/playerslice/cue/N   ou   /playerslice/cue/fire N", T("Disparar o cue N (ex.: 3 ou 2.5)")},
@@ -257,6 +292,14 @@ void sectionWhatsNew() {
             "Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.",
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
+        }},
+        {"0.9.0", {
+            "SOM: os clips tocam o áudio do ficheiro na placa de som escolhida (Definições → Áudio), sincronizado com o vídeo (também com timecode, Trim e loops).",
+            "Volume (dB), pan e mudo por clip; volume e mudo por layer; master de som na Composição. O dissolve/fade também faz crossfade do som.",
+            "VUs: no clip no ar (na grelha e no painel Clip), em cada layer (na grelha e no painel Layer) e master (barra de baixo e painel Composição).",
+            "Presets do MapSim (.psout): as layers dedicadas que faltam são criadas automaticamente; importar aceita .xml e .psout; erros mostrados na Saída avançada.",
+            "Importar do Resolume/MapSim: projetores em portrait do MapSim ficam rodados corretamente.",
+            "Definições → OSC: guia para ligar o Companion e pôr os botões.",
         }},
         {"0.8.5", {
             "Companion: ações OSC Next/Previous Column, Layer Next/Previous Clip, Pause/Resume, Go to Position, Master, Select Layer e Bypass/Solo com alternar.",

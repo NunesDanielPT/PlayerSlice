@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <cstdio>
 #include <cstring>
+#include <cmath>
+#include <string>
 #include <algorithm>
 #include <imgui_internal.h>
 #include "core/I18n.h"
@@ -54,6 +56,55 @@ bool valueSlider(App& app, const char* label, float* v, float lo, float hi, floa
     if (hov && !ImGui::IsItemActive() && ImGui::GetCurrentContext()->HoveredIdTimer > 0.8f)
         ImGui::SetTooltip("%s", T("Arrastar = mudar  ·  duplo clique = escrever o valor  ·  botão direito = repor"));
     (void)io;
+    return ch;
+}
+
+static float vuNorm(float peak) {
+    float db = peak > 1e-5f ? 20.f * std::log10(peak) : -100.f;
+    return std::clamp((db + 60.f) / 66.f, 0.f, 1.f);
+}
+
+void vuDraw(ImDrawList* dl, ImVec2 p0, ImVec2 size, float l, float r, bool vertical) {
+    const float lv[2] = {vuNorm(l), vuNorm(r)};
+    const float m12 = 48.f / 66.f, m3 = 57.f / 66.f;   // −12 dB e −3 dB
+    dl->AddRectFilled(p0, ImVec2(p0.x + size.x, p0.y + size.y), IM_COL32(22, 23, 26, 255), 2);
+    for (int c = 0; c < 2; ++c) {
+        auto seg = [&](float a, float b, ImU32 col) {
+            if (lv[c] <= a) return;
+            b = std::min(b, lv[c]);
+            if (vertical) {
+                float w = size.x * 0.5f - 1, x = p0.x + c * (w + 2);
+                dl->AddRectFilled(ImVec2(x, p0.y + size.y * (1 - b)), ImVec2(x + w, p0.y + size.y * (1 - a)), col);
+            } else {
+                float h = size.y * 0.5f - 0.5f, y = p0.y + c * (h + 1);
+                dl->AddRectFilled(ImVec2(p0.x + size.x * a, y), ImVec2(p0.x + size.x * b, y + h), col);
+            }
+        };
+        seg(0, m12, IM_COL32(60, 200, 110, 255));
+        seg(m12, m3, IM_COL32(230, 200, 60, 255));
+        seg(m3, 1, IM_COL32(235, 70, 60, 255));
+    }
+    // marca do 0 dB
+    float z = 60.f / 66.f;
+    if (vertical) dl->AddLine(ImVec2(p0.x, p0.y + size.y * (1 - z)), ImVec2(p0.x + size.x, p0.y + size.y * (1 - z)), IM_COL32(255, 255, 255, 70));
+    else dl->AddLine(ImVec2(p0.x + size.x * z, p0.y), ImVec2(p0.x + size.x * z, p0.y + size.y), IM_COL32(255, 255, 255, 70));
+}
+
+void vuItem(float l, float r, float width, float height) {
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    if (width <= 0) width = ImGui::GetContentRegionAvail().x;
+    ImGui::Dummy(ImVec2(width, height));
+    vuDraw(ImGui::GetWindowDrawList(), p0, ImVec2(width, height), l, r, false);
+    if (ImGui::IsItemHovered()) {
+        float pk = std::max(l, r);
+        ImGui::SetTooltip("%s", pk > 1e-5f ? (std::to_string((int)std::lround(20.f * std::log10(pk))) + " dB").c_str() : "-inf dB");
+    }
+}
+
+bool volumeSlider(App& app, const char* label, float* gain) {
+    float db = *gain <= 0.001f ? -60.f : std::clamp(20.f * std::log10(*gain), -60.f, 12.f);
+    bool ch = valueSlider(app, label, &db, -60.f, 12.f, 0.f, db <= -59.9f ? "-inf dB" : "%.1f dB");
+    if (ch) *gain = db <= -59.9f ? 0.f : std::pow(10.f, db / 20.f);
     return ch;
 }
 

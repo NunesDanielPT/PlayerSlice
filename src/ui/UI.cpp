@@ -1,4 +1,5 @@
 #include "ui/UI.h"
+#include "audio/AudioEngine.h"
 #include "app/App.h"
 #include "core/I18n.h"
 #include "core/Log.h"
@@ -546,6 +547,18 @@ static void statusBar(App& app) {
         else ImGui::TextColored(ImVec4(0.6f, 0.62f, 0.66f, 1), "%s", T("Projeto: fps automático  ·  sem saídas abertas"));
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Interface: %.0f fps (%.2f ms). O valor principal é o ritmo real a que as saídas recebem imagens."), app.fps, app.frameMs);
+    ImGui::SameLine(); ImGui::TextDisabled("|");
+    ImGui::SameLine();
+    {
+        VuLevel mv = AudioEngine::get().masterVu();
+        float y = ImGui::GetCursorPosY();
+        ImGui::SetCursorPosY(y + (ImGui::GetFrameHeight() - 10) * 0.5f);
+        vuItem(mv.l, mv.r, 90, 10);
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(y);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", app.project.comp.audioMute ? T("som mudo") : T("som"));
+    }
     ImGui::SameLine(); ImGui::TextDisabled(T("|  clips a tocar: %d"), playing);
     ImGui::SameLine(); ImGui::TextDisabled(T("|  frames descartados: %d"), dropped);
     ImGui::SameLine(); ImGui::TextDisabled(T("|  saídas no ar: %d"), (int)app.liveScreens.size());
