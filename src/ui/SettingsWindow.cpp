@@ -293,6 +293,10 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.9.5", {
+            "Íman na moldura do vídeo (Preview e janela grande): ao mover ou redimensionar, cola às bordas e ao centro da composição e às bordas dos outros vídeos no ar (lado a lado), com linhas-guia. Alt = sem íman; botão Íman no monitor.",
+            "Editor de saídas: íman das slices mais forte (atrai de mais longe).",
+        }},
         {"0.9.4", {
             "Transformar do clip (painel Clip e janela grande): escrever a largura × altura em píxeis que o vídeo ocupa, com Manter proporção, Nativo 1:1 e Ocupar tudo.",
         }},

@@ -119,6 +119,13 @@ static bool gizmoTarget(App& app, bool prev, int& li, int& ci, VideoPlayer*& v) 
     return v && !p.comp.layers[li].clips[ci].empty();
 }
 
+// íman: deslocamento até ao alvo mais próximo (dentro de thr); NAN em guide = sem alvo
+static float snapTo(std::initializer_list<float> vals, const std::vector<float>& targets, float thr, float& guide) {
+    float best = thr, delta = 0; guide = NAN;
+    for (float v : vals) for (float t : targets) { float d = t - v; if (std::fabs(d) < best) { best = std::fabs(d); delta = d; guide = t; } }
+    return delta;
+}
+
 static void clipGizmo(App& app, bool prev, ImVec2 imgMin, float scale, const char* monId) {
     Project& p = app.project;
     int li = -1, ci = -1;
@@ -173,20 +180,76 @@ static void clipGizmo(App& app, bool prev, ImVec2 imgMin, float scale, const cha
         // delta em píxeis da composição, no referencial da layer (desfazer escala da layer)
         float ls = std::max(0.01f, l.scale);
         float dx = (io.MousePos.x - g_cg.mouse0.x) / scale / ls, dy = (io.MousePos.y - g_cg.mouse0.y) / scale / ls;
+        // íman (Alt desliga): bordas e centro da composição e dos outros vídeos no ar; só sem rotação
+        const bool magnet = app.ui.snap && !io.KeyAlt && std::fabs(c.rotation) < 0.01f && std::fabs(l.rotation) < 0.01f;
+        const float thr = 10.f / scale;   // 10 píxeis do ecrã, em píxeis da composição
+        std::vector<float> tx, ty;
+        float gX = NAN, gY = NAN;
+        if (magnet) {
+            const float cw = (float)p.comp.width, chh = (float)p.comp.height;
+            tx = {0, cw * 0.5f, cw}; ty = {0, chh * 0.5f, chh};
+            if (l.useRegion) { tx.insert(tx.end(), {l.region.x, l.region.x + l.region.w}); ty.insert(ty.end(), {l.region.y, l.region.y + l.region.h}); }
+            for (int oi = 0; oi < (int)p.comp.layers.size(); ++oi) {
+                if (oi == li) continue;
+                const Layer& o = p.comp.layers[oi];
+                if (o.activeColumn < 0 || o.activeColumn >= (int)o.clips.size() || o.bypass) continue;
+                VideoPlayer* ov = app.comp.activePlayer(o.id);
+                if (!ov || ov->width() <= 0) continue;
+                float ox[4], oy[4];
+                Compositor::clipCorners(p, o, o.clips[o.activeColumn], (float)ov->width(), (float)ov->height(), ox, oy);
+                float x0 = std::min({ox[0], ox[1], ox[2], ox[3]}), x1 = std::max({ox[0], ox[1], ox[2], ox[3]});
+                float y0 = std::min({oy[0], oy[1], oy[2], oy[3]}), y1 = std::max({oy[0], oy[1], oy[2], oy[3]});
+                tx.insert(tx.end(), {x0, (x0 + x1) * 0.5f, x1}); ty.insert(ty.end(), {y0, (y0 + y1) * 0.5f, y1});
+            }
+        }
+        auto bbox = [&](float& x0, float& x1, float& y0, float& y1) {
+            float ax[4], ay[4];
+            Compositor::clipCorners(p, l, c, (float)v->width(), (float)v->height(), ax, ay);
+            x0 = std::min({ax[0], ax[1], ax[2], ax[3]}); x1 = std::max({ax[0], ax[1], ax[2], ax[3]});
+            y0 = std::min({ay[0], ay[1], ay[2], ay[3]}); y1 = std::max({ay[0], ay[1], ay[2], ay[3]});
+        };
         if (g_cg.handle < 0) {
             if (io.KeyShift) { if (std::fabs(dx) > std::fabs(dy)) dy = 0; else dx = 0; }
             c.offsetX = std::round(g_cg.offX + dx); c.offsetY = std::round(g_cg.offY + dy);
+            if (magnet) {
+                float x0, x1, y0, y1;
+                bbox(x0, x1, y0, y1);
+                c.offsetX = std::round(c.offsetX + snapTo({x0, (x0 + x1) * 0.5f, x1}, tx, thr, gX) / ls);
+                c.offsetY = std::round(c.offsetY + snapTo({y0, (y0 + y1) * 0.5f, y1}, ty, thr, gY) / ls);
+            }
         } else {
             int h = g_cg.handle;
             float w0 = std::max(1.f, g_cg.w0 / ls), h0 = std::max(1.f, g_cg.h0 / ls);
             float nw = std::max(4.f, w0 + hx[h] * dx), nh = std::max(4.f, h0 + hy[h] * dy);
             if (io.KeyShift) { float k = std::max(nw / w0, nh / h0); nw = w0 * k; nh = h0 * k; }   // manter proporção
-            c.scaleX = g_cg.sx * nw / w0;
-            c.scaleY = g_cg.sy * nh / h0;
-            // a esquina oposta fica parada
-            c.offsetX = g_cg.offX + hx[h] * (nw - w0) * 0.5f;
-            c.offsetY = g_cg.offY + hy[h] * (nh - h0) * 0.5f;
+            auto apply = [&] {
+                c.scaleX = g_cg.sx * nw / w0;
+                c.scaleY = g_cg.sy * nh / h0;
+                // a esquina oposta fica parada
+                c.offsetX = g_cg.offX + hx[h] * (nw - w0) * 0.5f;
+                c.offsetY = g_cg.offY + hy[h] * (nh - h0) * 0.5f;
+            };
+            apply();
+            if (magnet) {
+                float x0, x1, y0, y1;
+                bbox(x0, x1, y0, y1);
+                float ex = snapTo({hx[h] > 0 ? x1 : x0}, tx, thr, gX);
+                float ey = snapTo({hy[h] > 0 ? y1 : y0}, ty, thr, gY);
+                if (io.KeyShift) {
+                    // proporção: usar só o eixo com o íman mais próximo
+                    if (!std::isnan(gX) && (std::isnan(gY) || std::fabs(ex) <= std::fabs(ey))) { float k = (nw + hx[h] * ex / ls) / nw; nw *= k; nh *= k; gY = NAN; }
+                    else if (!std::isnan(gY)) { float k = (nh + hy[h] * ey / ls) / nh; nw *= k; nh *= k; gX = NAN; }
+                } else {
+                    nw = std::max(4.f, nw + hx[h] * ex / ls);
+                    nh = std::max(4.f, nh + hy[h] * ey / ls);
+                }
+                apply();
+            }
         }
+        // linhas-guia do íman
+        const float cwS = p.comp.width * scale, chS = p.comp.height * scale;
+        if (!std::isnan(gX)) dl->AddLine(ImVec2(imgMin.x + gX * scale, imgMin.y), ImVec2(imgMin.x + gX * scale, imgMin.y + chS), IM_COL32(255, 80, 200, 230), 1.5f);
+        if (!std::isnan(gY)) dl->AddLine(ImVec2(imgMin.x, imgMin.y + gY * scale), ImVec2(imgMin.x + cwS, imgMin.y + gY * scale), IM_COL32(255, 80, 200, 230), 1.5f);
         app.markDirty();
         char info[80];
         snprintf(info, sizeof(info), "%.0f, %.0f  ·  %.0f%% x %.0f%%", c.offsetX, c.offsetY, c.scale * c.scaleX * 100, c.scale * c.scaleY * 100);
@@ -256,6 +319,10 @@ static void monitorPanel(App& app, bool prev, int& mode, uint32_t& id, const cha
             flowNext(checkW(tr.c_str()));
             ImGui::Checkbox(tr.c_str(), &app.ui.monitorGizmo);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Moldura para mover e esticar o clip em preview (Shift = proporção; duplo clique = tamanho nativo)."));
+            std::string mg = std::string(T("Íman")) + "##mag" + cid;
+            flowNext(checkW(mg.c_str()));
+            ImGui::Checkbox(mg.c_str(), &app.ui.snap);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Ao mover ou redimensionar, o vídeo cola às bordas e ao centro da composição e aos outros vídeos no ar (Alt = sem íman)."));
             std::string big = std::string(T("Janela grande")) + "##big" + cid;
             flowNext(buttonW(big.c_str()));
             if (ImGui::Button(big.c_str())) { app.ui.showBigTransform = true; app.ui.bigPrev = prev; ImGui::SetWindowFocus("###bigtransform"); }

@@ -767,7 +767,7 @@ void canvas(App& app, Screen& sc, ImVec2 size) {
         } else {
             Shape sh = g_ed.start;
             ImVec2 d(mouseC.x - g_ed.mouseStart.x, mouseC.y - g_ed.mouseStart.y);
-            const float thr = 8.f / zoom;
+            const float thr = 12.f / zoom;   // 12 píxeis do ecrã
             const bool snap = app.ui.snap && !io.KeyAlt;
             if (g_ed.mode == Drag::Move) {
                 if (io.KeyShift) { if (std::fabs(d.x) > std::fabs(d.y)) d.y = 0; else d.x = 0; }
