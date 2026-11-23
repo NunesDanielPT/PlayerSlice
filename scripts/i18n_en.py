@@ -1,6 +1,7 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Colunas e layers com nome automático mudam de número ao arrastar (a coluna 4 posta no lugar da 2 passa a Coluna 2; Layer 1 = a de baixo). Nomes que escreveste não mudam.':'Columns and layers with automatic names renumber when dragged (column 4 moved to slot 2 becomes Column 2; Layer 1 = the bottom one). Names you typed stay.',
 'Mudo (som desta layer)':'Mute (this layer\'s sound)','Botão M (mudo) em cada layer, ao lado do X, B e S.':'M (mute) button on each layer, next to X, B and S.',
 'Pico:':'Peak:','(0 dB = máximo, acima disso distorce)':'(0 dB = maximum, above it distorts)',
 'Som sem cortes em ficheiros com o áudio gravado em blocos grandes (ex.: MOV MJPEG): o leitor lê à frente para ter sempre ~1,5 s de som pronto.':'Sound without dropouts in files with audio stored in large blocks (e.g. MJPEG MOV): the reader reads ahead to always have ~1.5 s of sound ready.',

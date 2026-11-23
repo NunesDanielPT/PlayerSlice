@@ -445,6 +445,7 @@
 {"Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.", "Animated test pattern (bar, hand and frame counter) to check that the output is smooth."},
 {"Input Selection mostra no fundo a layer escolhida como fonte da slice.", "Input Selection shows the layer chosen as the slice source in the background."},
 {"Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).", "Drag layers by their name, with animation: ghost, faded source and a line where it will land (also for columns and clips)."},
+{"Colunas e layers com nome automático mudam de número ao arrastar (a coluna 4 posta no lugar da 2 passa a Coluna 2; Layer 1 = a de baixo). Nomes que escreveste não mudam.", "Columns and layers with automatic names renumber when dragged (column 4 moved to slot 2 becomes Column 2; Layer 1 = the bottom one). Names you typed stay."},
 {"Botão M (mudo) em cada layer, ao lado do X, B e S.", "M (mute) button on each layer, next to X, B and S."},
 {"Som sem cortes em ficheiros com o áudio gravado em blocos grandes (ex.: MOV MJPEG): o leitor lê à frente para ter sempre ~1,5 s de som pronto.", "Sound without dropouts in files with audio stored in large blocks (e.g. MJPEG MOV): the reader reads ahead to always have ~1.5 s of sound ready."},
 {"VU master (e de layer e clip) com o valor em dB e o pico dos últimos 1,5 s (passa o rato por cima).", "Master VU (and layer and clip) with the dB value and the peak of the last 1.5 s (hover over it)."},

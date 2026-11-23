@@ -279,16 +279,33 @@ void App::localizeDefaultNames() {
     const char* from = en ? "Coluna " : "Column ";
     const char* to   = en ? "Column " : "Coluna ";
     const size_t fl = strlen(from);
+    // nome automático = "<prefixo><número>" (ex.: "Coluna 4", "Column 4", "Layer 2")
+    auto isAuto = [](const std::string& n, const char* pre) {
+        size_t pl = strlen(pre);
+        if (n.size() <= pl || n.compare(0, pl, pre) != 0) return false;
+        for (size_t k = pl; k < n.size(); ++k) if (!isdigit((unsigned char)n[k])) return false;
+        return true;
+    };
+    // colunas: idioma + número da posição (ao arrastar a coluna 4 para o lugar da 2 passa a "Coluna 2")
     auto fix = [&](std::vector<Column>& cols) {
-        for (auto& c : cols) {
-            if (c.name.size() <= fl || c.name.compare(0, fl, from) != 0) continue;
-            bool digits = true;
-            for (size_t k = fl; k < c.name.size(); ++k) if (!isdigit((unsigned char)c.name[k])) { digits = false; break; }
-            if (digits) c.name = to + c.name.substr(fl);
+        for (size_t i = 0; i < cols.size(); ++i) {
+            auto& c = cols[i];
+            if (!isAuto(c.name, from) && !isAuto(c.name, to)) continue;
+            std::string want = to + std::to_string(i + 1);
+            if (c.name != want) c.name = want;
         }
     };
+    (void)fl;
     fix(project.comp.columns);
     for (auto& s : project.comp.stacks) fix(s.columns);
+    // layers: número da posição (Layer 1 = a de baixo, como no Resolume)
+    const int nL = (int)project.comp.layers.size();
+    for (int li = 0; li < nL; ++li) {
+        Layer& l = project.comp.layers[li];
+        if (!isAuto(l.name, "Layer ")) continue;
+        std::string want = "Layer " + std::to_string(nL - li);
+        if (l.name != want) l.name = want;
+    }
 }
 
 void App::matchOutputRefresh() {
