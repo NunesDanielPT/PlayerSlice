@@ -85,23 +85,29 @@ float4 PS_Test(VSOut i) : SV_Target {
     float2 p = float2(q.x * aspect, q.y);           // espaço com proporção real
     float cells = 6.0;
     float cell = 1.0 / cells;
-    int cx = (int)floor(p.x / cell), cy = (int)floor(p.y / cell);
-    float chk = ((cx + cy) & 1) ? 0.78 : 1.0;
-    float3 col = gColor.rgb * chk;
+    // xadrez com supersampling 4x (bordas sem serrilhado mesmo em perspetiva)
+    float2 dx = ddx(p), dy = ddy(p);
+    float chkSum = 0;
+    [unroll] for (int k = 0; k < 4; ++k) {
+        float2 o = float2((k & 1) ? 0.25 : -0.25, (k & 2) ? 0.25 : -0.25);
+        float2 ps = p + dx * o.x + dy * o.y;
+        int sx = (int)floor(ps.x / cell), sy = (int)floor(ps.y / cell);
+        chkSum += ((sx + sy) & 1) ? 0.78 : 1.0;
+    }
+    float3 col = gColor.rgb * (chkSum * 0.25);
 
-    float2 fw = fwidth(p) * 1.5;
-    // círculo
+    // linhas com largura constante em píxeis (distância / gradiente → píxeis)
     float2 c = float2(aspect * 0.5, 0.5);
     float r = min(aspect, 1.0) * 0.48;
-    float d = abs(length(p - c) - r);
-    float line_ = 1.0 - smoothstep(0.0, max(fw.x, fw.y), d);
+    float lc = length(p - c) - r;
+    float line_ = 1.0 - smoothstep(0.6, 1.6, abs(lc) / max(fwidth(lc), 1e-6));
     // diagonais
-    float d1 = abs(q.y - q.x) * 1.0;
-    float d2 = abs(q.y - (1.0 - q.x));
-    float2 fq = fwidth(q) * 1.5;
-    line_ = max(line_, 1.0 - smoothstep(0.0, max(fq.x, fq.y), min(d1, d2)));
+    float e1 = q.y - q.x, e2 = q.y - (1.0 - q.x);
+    line_ = max(line_, 1.0 - smoothstep(0.6, 1.6, abs(e1) / max(fwidth(e1), 1e-6)));
+    line_ = max(line_, 1.0 - smoothstep(0.6, 1.6, abs(e2) / max(fwidth(e2), 1e-6)));
     // moldura
-    float2 e = min(q, 1.0 - q) / max(fq, 1e-5);
+    float2 fq = fwidth(q) * 1.5;
+    float2 e = min(q, 1.0 - q) / max(fwidth(q), 1e-6);
     line_ = max(line_, 1.0 - smoothstep(1.0, 2.0, min(e.x, e.y)));
     col = lerp(col, float3(1, 1, 1), line_ * 0.85);
 
@@ -137,19 +143,31 @@ float2 warpST(float2 px) {
     return st.xy / st.z;
 }
 
+// cobertura do píxel junto às bordas do quadrilátero (anti-aliasing analítico, ~1 píxel)
+float edgeAA(float2 st) {
+    float2 fw = max(fwidth(st), 1e-6);
+    float2 d = min(st, 1 - st) / fw;          // distância à borda mais próxima, em píxeis (negativa fora)
+    return saturate(min(d.x, d.y) + 0.5);
+}
+
 float4 PS_Warp(VSOut i) : SV_Target {
     float2 st = warpST(i.pos.xy);
+    float aa = edgeAA(st);
     float3 s3 = float3(st, 1);
     float3 uv = float3(dot(gHi0.xyz, s3), dot(gHi1.xyz, s3), dot(gHi2.xyz, s3));
     float4 c = t0.Sample(s0, uv.xy / uv.z);
     float3 rgb = (c.rgb - 0.5) * (1 + gAdjust.w) + 0.5;
     rgb *= (1 + gAdjust.rgb);
-    return finish(rgb, c.a);
+    return finish(rgb, c.a * aa);
 }
 
 float4 PS_WarpTest(VSOut i) : SV_Target {
-    i.q = saturate(warpST(i.pos.xy));
-    return PS_Test(i);
+    float2 st = warpST(i.pos.xy);
+    float aa = edgeAA(st);
+    i.q = saturate(st);
+    float4 c = PS_Test(i);
+    c.a *= aa;
+    return c;
 }
 
 // ---------------------------------------------------------------------------
@@ -354,10 +372,13 @@ bool Gfx::init(const std::string& preferredGpu, std::string* err) {
     m_dev->CreateBuffer(&bd, nullptr, &m_cb);
 
     D3D11_SAMPLER_DESC sd{};
-    sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    // anisotrópico: superfícies muito inclinadas (perspetiva) ficam nítidas sem serrilhado
+    sd.Filter = D3D11_FILTER_ANISOTROPIC;
+    sd.MaxAnisotropy = 8;
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.MaxLOD = D3D11_FLOAT32_MAX;
     m_dev->CreateSamplerState(&sd, &m_sampLinear);
+    sd.MaxAnisotropy = 1;
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
     m_dev->CreateSamplerState(&sd, &m_sampPoint);
 
@@ -397,19 +418,30 @@ void Gfx::shutdown() {
     m_ctx.Reset(); m_dev.Reset(); m_adapter.Reset(); m_factory.Reset();
 }
 
-bool Gfx::createRT(RenderTarget& rt, int w, int h, DXGI_FORMAT fmt) {
+bool Gfx::createRT(RenderTarget& rt, int w, int h, DXGI_FORMAT fmt, bool mips) {
     rt = {};
     if (w <= 0 || h <= 0) return false;
     D3D11_TEXTURE2D_DESC td{};
-    td.Width = w; td.Height = h; td.MipLevels = 1; td.ArraySize = 1;
+    td.Width = w; td.Height = h; td.MipLevels = mips ? 0 : 1; td.ArraySize = 1;
     td.Format = fmt; td.SampleDesc.Count = 1;
     td.Usage = D3D11_USAGE_DEFAULT;
     td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    if (mips) td.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
     if (FAILED(m_dev->CreateTexture2D(&td, nullptr, &rt.tex))) { PS_ERROR("Falha a criar render target %dx%d", w, h); return false; }
     m_dev->CreateRenderTargetView(rt.tex.Get(), nullptr, &rt.rtv);
     m_dev->CreateShaderResourceView(rt.tex.Get(), nullptr, &rt.srv);
     rt.w = w; rt.h = h;
     return true;
+}
+
+void Gfx::genMips(const RenderTarget& rt) {
+    if (!rt.srv) return;
+    D3D11_TEXTURE2D_DESC td{};
+    rt.tex->GetDesc(&td);
+    if (td.MipLevels <= 1) return;
+    std::lock_guard<std::recursive_mutex> lk(m_ctxMutex);
+    m_ctx->OMSetRenderTargets(0, nullptr, nullptr);   // o mip 0 não pode estar ligado como alvo
+    m_ctx->GenerateMips(rt.srv.Get());
 }
 
 static DXGI_FORMAT planeFormat(DXGI_FORMAT fmt, int plane) {

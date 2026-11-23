@@ -89,7 +89,9 @@ public:
     // Mutex do contexto imediato: partilhado com o descodificador por hardware (FFmpeg)
     std::recursive_mutex& ctxMutex() { return m_ctxMutex; }
 
-    bool createRT(RenderTarget& rt, int w, int h, DXGI_FORMAT fmt = DXGI_FORMAT_R8G8B8A8_UNORM);
+    // mips = true: cadeia de mipmaps (para reduzir/inclinar sem "degraus" nas slices); chamar genMips() depois de desenhar
+    bool createRT(RenderTarget& rt, int w, int h, DXGI_FORMAT fmt = DXGI_FORMAT_R8G8B8A8_UNORM, bool mips = false);
+    void genMips(const RenderTarget& rt);
     bool ensureVideoTexture(VideoTexture& vt, int w, int h, DXGI_FORMAT fmt, DXGI_FORMAT fmt2 = DXGI_FORMAT_UNKNOWN, bool dynamic = false);
 
     void setTarget(ID3D11RenderTargetView* rtv, int w, int h);

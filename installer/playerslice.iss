@@ -1,7 +1,7 @@
 ; Instalador do PLAYERSLICE (Inno Setup 6)
 #define AppName "PLAYERSLICE"
 #ifndef AppVersion
-  #define AppVersion "0.8.3"
+  #define AppVersion "0.8.4"
 #endif
 
 [Setup]

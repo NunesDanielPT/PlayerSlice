@@ -342,7 +342,7 @@ void Compositor::render(Project& p) {
     const int cw = p.comp.width, ch = p.comp.height;
     const DXGI_FORMAT fmt = p.comp.colorDepth == 16 ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
     if (!m_comp.valid() || m_comp.w != cw || m_comp.h != ch || m_compFmt != fmt) {
-        if (!G.createRT(m_comp, cw, ch, fmt)) return;
+        if (!G.createRT(m_comp, cw, ch, fmt, true)) return;
         m_compRaw = {};
         m_compFmt = fmt;
         PS_INFO("Composição %dx%d %dbpc", cw, ch, p.comp.colorDepth);
@@ -379,6 +379,8 @@ void Compositor::render(Project& p) {
         G.drawQuad(q);
     }
 
+    G.genMips(m_comp);
+
     // 2) layers usadas diretamente como fonte de slices
     std::set<uint32_t> needed;
     for (auto& s : p.screens)
@@ -391,15 +393,16 @@ void Compositor::render(Project& p) {
         const Layer& l = p.comp.layers[i];
         if (!needed.count(l.id)) continue;
         RenderTarget& rt = m_layerRT[l.id];
-        if (!rt.valid() || rt.w != cw || rt.h != ch) if (!G.createRT(rt, cw, ch, fmt)) continue;
+        if (!rt.valid() || rt.w != cw || rt.h != ch) if (!G.createRT(rt, cw, ch, fmt, true)) continue;
         G.setTarget(rt.rtv.Get(), cw, ch);
         G.clear(rt.rtv.Get(), 0, 0, 0, 0);
         auto it = m_layers.find(l.id);
         if (it != m_layers.end() && visible(l)) drawLayer(p, l, it->second, m_now);
+        G.genMips(rt);
     }
 
     // 2b) preview: só o clip em preview, na região da sua layer
-    if (!m_prevRT.valid() || m_prevRT.w != cw || m_prevRT.h != ch) G.createRT(m_prevRT, cw, ch, fmt);
+    if (!m_prevRT.valid() || m_prevRT.w != cw || m_prevRT.h != ch) G.createRT(m_prevRT, cw, ch, fmt, true);
     if (m_prevRT.valid()) {
         G.setTarget(m_prevRT.rtv.Get(), cw, ch);
         G.clear(m_prevRT.rtv.Get(), 0, 0, 0, 1);
@@ -409,6 +412,7 @@ void Compositor::render(Project& p) {
             l.blend = BlendMode::Normal;
             drawClip(p, l, m_prevClip, *m_prev, 1.f);
         }
+        G.genMips(m_prevRT);
     }
 
     // 3) cada ecrã num render target próprio (usado nas saídas e no editor)
@@ -463,10 +467,15 @@ void Compositor::drawScreen(const Project& p, const Screen& s, ID3D11RenderTarge
 
         QuadParams q;
         // vértices pela ordem do triangle strip: TL, TR, BL, BR
+        // (desenhado 1.5 px maior: o shader recorta a borda exata com anti-aliasing)
         const int order[4] = {0, 1, 3, 2};
+        float gx = (out[0][0] + out[1][0] + out[2][0] + out[3][0]) * 0.25f, gy = (out[0][1] + out[1][1] + out[2][1] + out[3][1]) * 0.25f;
         for (int i = 0; i < 4; ++i) {
-            q.pos[i][0] = out[order[i]][0] / w * 2.f - 1.f;
-            q.pos[i][1] = 1.f - out[order[i]][1] / h * 2.f;
+            float vx = out[order[i]][0], vy = out[order[i]][1];
+            float dx = vx - gx, dy = vy - gy, dl = std::max(1e-3f, std::hypot(dx, dy));
+            vx += dx / dl * 1.5f; vy += dy / dl * 1.5f;
+            q.pos[i][0] = vx / w * 2.f - 1.f;
+            q.pos[i][1] = 1.f - vy / h * 2.f;
         }
         // píxel do alvo → (s,t) e (s,t) → UV na composição
         Mat3 ho = inverse(squareToQuad(out));

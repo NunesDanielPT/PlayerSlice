@@ -254,6 +254,11 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.8.4", {
+            "Slices sem serrilhado: bordas suavizadas (anti-aliasing) em slices rodadas ou com pontos livres; slices píxel a píxel continuam nítidas.",
+            "Imagem nas slices reduzidas ou em perspetiva sem \"degraus\": mipmaps e filtragem anisotrópica (paredes muito inclinadas ficam limpas).",
+            "Test pattern: xadrez, círculo, diagonais e moldura desenhados sem serrilhado.",
+        }},
         {"0.8.3", {
             "Companion (módulo Resolume Arena): o PLAYERSLICE responde às perguntas de estado (\"?\") como o Resolume — colunas e clips no ar, nomes, duração e posição — e o módulo fica verde.",
             "Feedback OSC corrigido: clip no ar = 2 (como o Resolume), coluna ativa, nome, duração e posição dos clips 10 vezes por segundo (contadores de tempo no Companion).",

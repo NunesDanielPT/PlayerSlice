@@ -1,6 +1,9 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Slices sem serrilhado: bordas suavizadas (anti-aliasing) em slices rodadas ou com pontos livres; slices píxel a píxel continuam nítidas.':'No more jagged slices: smoothed edges (anti-aliasing) on rotated or free-point slices; pixel-perfect slices stay sharp.',
+'Imagem nas slices reduzidas ou em perspetiva sem \\"degraus\\": mipmaps e filtragem anisotrópica (paredes muito inclinadas ficam limpas).':'Picture on scaled-down or perspective slices without \\"stair steps\\": mipmaps and anisotropic filtering (steep walls look clean).',
+'Test pattern: xadrez, círculo, diagonais e moldura desenhados sem serrilhado.':'Test pattern: checkerboard, circle, diagonals and frame drawn without jaggies.',
 'Companion (módulo Resolume Arena): o PLAYERSLICE responde às perguntas de estado (\\"?\\") como o Resolume — colunas e clips no ar, nomes, duração e posição — e o módulo fica verde.':'Companion (Resolume Arena module): PLAYERSLICE answers status queries (\\"?\\") like Resolume — live columns and clips, names, duration and position — and the module turns green.',
 'Feedback OSC corrigido: clip no ar = 2 (como o Resolume), coluna ativa, nome, duração e posição dos clips 10 vezes por segundo (contadores de tempo no Companion).':'OSC feedback fixed: live clip = 2 (like Resolume), active column, name, duration and clip position 10 times per second (time counters in Companion).',
 'Importar do Resolume corrigido: a forma das slices vem da grelha de warp do Resolume (paredes em perspetiva ficam iguais) e os nomes das slices são os do Resolume.':'Import from Resolume fixed: slice shapes come from Resolume\'s warp grid (perspective walls match) and slice names are Resolume\'s.',
