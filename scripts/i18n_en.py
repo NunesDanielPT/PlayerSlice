@@ -1,6 +1,11 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Tamanho (px)':'Size (px)',
+'Largura × altura que o vídeo ocupa na composição, em píxeis. Escreve e carrega Enter (ou Tab).':'Width × height the video takes in the composition, in pixels. Type and press Enter (or Tab).',
+'Manter proporção':'Keep aspect ratio','Nativo 1:1':'Native 1:1','Tamanho real do vídeo: %dx%d px':'Real video size: %dx%d px',
+'Ocupar tudo':'Fill all','Ocupa a composição inteira: %dx%d px':'Fills the whole composition: %dx%d px',
+'Transformar do clip (painel Clip e janela grande): escrever a largura × altura em píxeis que o vídeo ocupa, com Manter proporção, Nativo 1:1 e Ocupar tudo.':'Clip transform (Clip panel and large window): type the width × height in pixels the video takes, with Keep aspect ratio, Native 1:1 and Fill all.',
 'Colunas e layers com nome automático mudam de número ao arrastar (a coluna 4 posta no lugar da 2 passa a Coluna 2; Layer 1 = a de baixo). Nomes que escreveste não mudam.':'Columns and layers with automatic names renumber when dragged (column 4 moved to slot 2 becomes Column 2; Layer 1 = the bottom one). Names you typed stay.',
 'Mudo (som desta layer)':'Mute (this layer\'s sound)','Botão M (mudo) em cada layer, ao lado do X, B e S.':'M (mute) button on each layer, next to X, B and S.',
 'Pico:':'Peak:','(0 dB = máximo, acima disso distorce)':'(0 dB = maximum, above it distorts)',

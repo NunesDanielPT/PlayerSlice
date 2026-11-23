@@ -293,6 +293,9 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.9.4", {
+            "Transformar do clip (painel Clip e janela grande): escrever a largura × altura em píxeis que o vídeo ocupa, com Manter proporção, Nativo 1:1 e Ocupar tudo.",
+        }},
         {"0.9.3", {
             "Colunas e layers com nome automático mudam de número ao arrastar (a coluna 4 posta no lugar da 2 passa a Coluna 2; Layer 1 = a de baixo). Nomes que escreveste não mudam.",
         }},

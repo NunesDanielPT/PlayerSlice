@@ -409,6 +409,58 @@ void clipTransformControls(App& app, Clip& c) {
         int fm = (int)c.fit;
         if (ImGui::Combo(T("Encaixe"), &fm, fits, 4)) { app.checkpoint(); c.fit = (FitMode)fm; }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Esticar, Caber e Preencher só ficam diferentes quando a proporção do vídeo é diferente da composição (ex.: vídeo 16:9 numa composição 48:9). Tamanho nativo usa os píxeis reais do vídeo."));
+        // tamanho em píxeis da composição (escrever a resolução que o vídeo ocupa)
+        {
+            const Layer* lay = nullptr;
+            for (auto& L : p.comp.layers) for (auto& cc : L.clips) if (&cc == &c) lay = &L;
+            float vw = 0, vh = 0;
+            auto th = ThumbnailCache::get().request(c.path);
+            if (th->state == ThumbnailCache::Entry::State::Ready) { vw = (float)th->info.width; vh = (float)th->info.height; }
+            if (vw > 0 && vh > 0) {
+                Rect R = lay && lay->useRegion ? lay->region : Rect{0, 0, (float)p.comp.width, (float)p.comp.height};
+                float bw = R.w, bh = R.h;   // tamanho base pelo encaixe (como no compositor)
+                switch (c.fit) {
+                case FitMode::Stretch: break;
+                case FitMode::Fit:  { float s = std::min(R.w / vw, R.h / vh); bw = vw * s; bh = vh * s; } break;
+                case FitMode::Fill: { float s = std::max(R.w / vw, R.h / vh); bw = vw * s; bh = vh * s; } break;
+                case FitMode::Native: bw = vw; bh = vh; break;
+                }
+                const float sc = std::max(1e-4f, c.scale);
+                int W = (int)std::lround(bw * sc * c.scaleX), H = (int)std::lround(bh * sc * c.scaleY);
+                static bool keepRatio = true;
+                float full = ImGui::CalcItemWidth();
+                float half = (full - ImGui::CalcTextSize("×").x - ImGui::GetStyle().ItemSpacing.x * 2) * 0.5f;
+                ImGui::SetNextItemWidth(half);
+                if (ImGui::InputInt("##pxw", &W, 0, 0)) {
+                    W = std::clamp(W, 1, 32768);
+                    float nx = W / (bw * sc);
+                    if (keepRatio && c.scaleX > 1e-4f) c.scaleY *= nx / c.scaleX;
+                    c.scaleX = nx;
+                    app.markDirty();
+                }
+                undoOnActivate(app);
+                ImGui::SameLine(); ImGui::TextUnformatted("×"); ImGui::SameLine();
+                ImGui::SetNextItemWidth(half);
+                if (ImGui::InputInt("##pxh", &H, 0, 0)) {
+                    H = std::clamp(H, 1, 32768);
+                    float ny = H / (bh * sc);
+                    if (keepRatio && c.scaleY > 1e-4f) c.scaleX *= ny / c.scaleY;
+                    c.scaleY = ny;
+                    app.markDirty();
+                }
+                undoOnActivate(app);
+                ImGui::SameLine();
+                ImGui::TextUnformatted(T("Tamanho (px)"));
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Largura × altura que o vídeo ocupa na composição, em píxeis. Escreve e carrega Enter (ou Tab)."));
+                ImGui::Checkbox(T("Manter proporção"), &keepRatio);
+                ImGui::SameLine();
+                if (ImGui::SmallButton(T("Nativo 1:1"))) { app.checkpoint(); c.fit = FitMode::Native; c.scale = c.scaleX = c.scaleY = 1; app.markDirty(); }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Tamanho real do vídeo: %dx%d px"), (int)vw, (int)vh);
+                ImGui::SameLine();
+                if (ImGui::SmallButton(T("Ocupar tudo"))) { app.checkpoint(); c.fit = FitMode::Stretch; c.scale = c.scaleX = c.scaleY = 1; c.offsetX = c.offsetY = 0; app.markDirty(); }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(T("Ocupa a composição inteira: %dx%d px"), (int)R.w, (int)R.h);
+            }
+        }
         param(app, T("Posição X"), &c.offsetX, -(float)p.comp.width, (float)p.comp.width, 0, "%.0f");
         param(app, T("Posição Y"), &c.offsetY, -(float)p.comp.height, (float)p.comp.height, 0, "%.0f");
         param(app, T("Escala"), &c.scale, 0.01f, 4, 1, "%.3f");
