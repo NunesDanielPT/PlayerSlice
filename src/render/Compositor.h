@@ -22,6 +22,7 @@ class Compositor {
 public:
     void trigger(Project& p, int layerIndex, int column);
     void triggerColumn(Project& p, int column);
+    int  lastColumn() const { return m_lastColumn; }      // última coluna posta no ar (-1 = nenhuma)
     void stopLayer(Project& p, int layerIndex);
     void stopAll(Project& p);
     void restartLayer(int layerIndex, Project& p);
@@ -80,6 +81,7 @@ private:
     uint32_t m_prevLayerId = 0;
     int      m_prevCol = -1;
     int      m_prevStack = 0;
+    int      m_lastColumn = -1;
     RenderTarget m_prevRT;
     std::map<uint32_t, RenderTarget> m_prevScreenRT;
     std::set<uint32_t> m_prevScreenReq, m_prevScreenActive;

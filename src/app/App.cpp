@@ -442,6 +442,88 @@ void App::applyOsc() {
     m_oscSentLive = -1;
 }
 
+// ---------------------------------------------------------------------------
+// estado no formato do Resolume (respostas a "?" e feedback)
+// connected: 0 = vazio/desligado, 1 = carregado, 2 = no ar (o Companion considera >= 2 "ligado")
+// ---------------------------------------------------------------------------
+static float clipLength(const Clip& c) {
+    auto th = ThumbnailCache::get().request(c.path);
+    double d = th->state == ThumbnailCache::Entry::State::Ready ? th->info.duration : 0;
+    double end = c.trimOut > 0 ? (d > 0 ? std::min(c.trimOut, d) : c.trimOut) : d;
+    return (float)std::max(0.0, end - c.trimIn);
+}
+
+static float layerPosition(App& app, const Layer& l) {
+    VideoPlayer* v = app.comp.activePlayer(l.id);
+    if (!v || l.activeColumn < 0) return 0.f;
+    double len = v->trimLength();
+    if (len <= 0) return 0.f;
+    return (float)std::clamp(std::fmod(std::max(0.0, v->position()), len) / len, 0.0, 1.0);
+}
+
+static int columnConnected(App& app, int c) {
+    const Project& p = app.project;
+    bool any = false, live = false;
+    for (auto& l : p.comp.layers) {
+        if (c < (int)l.clips.size() && !l.clips[c].empty()) any = true;
+        if (l.activeColumn == c) live = true;
+    }
+    if (live && app.comp.lastColumn() == c) return 2;
+    return any ? 1 : 0;
+}
+
+void App::oscQuery(const OscMessage& m, const std::vector<std::string>& a) {
+    Project& p = project;
+    const int nL = (int)p.comp.layers.size(), nC = (int)p.comp.columns.size();
+    auto F = [](float f) { OscArg x; x.type = 'f'; x.f = f; return x; };
+    auto I = [](int i) { OscArg x; x.type = 'i'; x.i = i; return x; };
+    auto S = [](const std::string& s) { OscArg x; x.type = 's'; x.s = s; return x; };
+    auto R = [&](const std::string& addr, const OscArg& v) { Osc::get().reply(m.from, addr, v); };
+    auto range = [](const std::string& tok, int n) {
+        std::vector<int> r;
+        if (tok == "*") { for (int i = 1; i <= n; ++i) r.push_back(i); }
+        else { int k = atoi(tok.c_str()); if (k >= 1 && k <= n) r.push_back(k); }
+        return r;
+    };
+    if (a.size() < 4 || a[0] != "composition") return;
+    if (a[1] == "columns") {
+        for (int c : range(a[2], nC)) {
+            std::string base = "/composition/columns/" + std::to_string(c) + "/";
+            if (a[3] == "connected") R(base + "connected", I(columnConnected(*this, c - 1)));
+            else if (a[3] == "name") R(base + "name", S(p.comp.columns[c - 1].name));
+        }
+        return;
+    }
+    if (a[1] != "layers") return;
+    for (int L : range(a[2], nL)) {
+        Layer& l = p.comp.layers[nL - L];
+        std::string lb = "/composition/layers/" + std::to_string(L) + "/";
+        if (a.size() == 4) {
+            if (a[3] == "position") R(lb + "position", F(layerPosition(*this, l)));
+            else if (a[3] == "name") R(lb + "name", S(l.name));
+            else if (a[3] == "bypassed") R(lb + "bypassed", I(l.bypass ? 1 : 0));
+            else if (a[3] == "master") R(lb + "master", F(l.opacity));
+            continue;
+        }
+        if (a.size() == 5 && a[3] == "video" && a[4] == "opacity") { R(lb + "video/opacity", F(l.opacity)); continue; }
+        if (a[3] != "clips" || a.size() < 6) continue;
+        std::string rest;
+        for (size_t k = 5; k < a.size(); ++k) rest += (k > 5 ? "/" : "") + a[k];
+        const bool wild = a[4] == "*";
+        for (int c : range(a[4], (int)l.clips.size())) {
+            const Clip& cl = l.clips[c - 1];
+            if (wild && cl.empty() && rest != "connected") continue;
+            std::string cb = lb + "clips/" + std::to_string(c) + "/";
+            bool live = l.activeColumn == c - 1;
+            if (rest == "connected") { if (!wild || !cl.empty() || live) R(cb + "connected", I(cl.empty() ? 0 : live ? 2 : 1)); }
+            else if (rest == "name") R(cb + "name", S(cl.name));
+            else if (rest == "transport/position") R(cb + "transport/position", F(live ? layerPosition(*this, l) : 0.f));
+            else if (rest == "transport/position/behaviour/duration") R(cb + "transport/position/behaviour/duration", F(clipLength(cl)));
+            else if (rest == "transport/position/behaviour/speed") R(cb + "transport/position/behaviour/speed", F(cl.speed));
+        }
+    }
+}
+
 // Endereços compatíveis com o Resolume (1 = layer de baixo, colunas a partir de 1)
 void App::handleOsc() {
     auto msgs = Osc::get().poll();
@@ -458,6 +540,8 @@ void App::handleOsc() {
             i = j + 1;
         }
         auto num = [&](size_t k) { return k < a.size() ? atoi(a[k].c_str()) : 0; };
+        // pergunta "?" (Companion, como no Resolume): responder a quem perguntou e não executar nada
+        if (!m.args.empty() && m.args[0].type == 's' && m.args[0].s == "?") { oscQuery(m, a); continue; }
         const float v = m.value(1.f);
         const bool press = v > 0.5f;
         if (a.size() >= 2 && a[0] == "composition") {
@@ -531,9 +615,37 @@ void App::handleOsc() {
         int& sent = m_oscSentColumn[li];
         if (cur == sent) continue;
         std::string base = "/composition/layers/" + std::to_string(nL - li) + "/clips/";
-        if (sent >= 0) Osc::get().send(base + std::to_string(sent + 1) + "/connected", 0);
-        if (cur >= 0) Osc::get().send(base + std::to_string(cur + 1) + "/connected", 1);
+        if (sent >= 0) Osc::get().send(base + std::to_string(sent + 1) + "/connected", 1);
+        if (cur >= 0) {
+            Osc::get().send(base + std::to_string(cur + 1) + "/connected", 2);
+            const Clip& cl = p.comp.layers[li].clips[cur];
+            Osc::get().send(base + std::to_string(cur + 1) + "/name", cl.name);
+            Osc::get().send(base + std::to_string(cur + 1) + "/transport/position/behaviour/duration", clipLength(cl));
+        }
         sent = cur;
+    }
+    // coluna ativa
+    {
+        int col = -1;
+        for (int c = 0; c < (int)p.comp.columns.size(); ++c) if (columnConnected(*this, c) == 2) { col = c; break; }
+        if (col != m_oscSentCol) {
+            if (m_oscSentCol >= 0) Osc::get().send("/composition/columns/" + std::to_string(m_oscSentCol + 1) + "/connected", 1);
+            if (col >= 0) Osc::get().send("/composition/columns/" + std::to_string(col + 1) + "/connected", 2);
+            m_oscSentCol = col;
+        }
+    }
+    // posição dos clips no ar (10 vezes por segundo, para os contadores de tempo do Companion)
+    double nowT = nowSeconds();
+    if (nowT - m_oscLastPos >= 0.1) {
+        m_oscLastPos = nowT;
+        for (int li = 0; li < nL; ++li) {
+            const Layer& l = p.comp.layers[li];
+            if (l.activeColumn < 0) continue;
+            float pos = layerPosition(*this, l);
+            std::string lb = "/composition/layers/" + std::to_string(nL - li) + "/";
+            Osc::get().sendQuiet(lb + "position", pos);
+            Osc::get().sendQuiet(lb + "clips/" + std::to_string(l.activeColumn + 1) + "/transport/position", pos);
+        }
     }
     int live = anyLive() ? 1 : 0;
     if (live != m_oscSentLive) { Osc::get().send("/playerslice/outputs/live", live); m_oscSentLive = live; }

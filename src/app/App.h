@@ -171,6 +171,9 @@ private:
     void handleOsc();
     std::vector<int> m_oscSentColumn;     // feedback: coluna ativa já enviada por layer
     int m_oscSentLive = -1;
+    int m_oscSentCol = -2;                // feedback: coluna ativa já enviada
+    double m_oscLastPos = 0;              // feedback: última posição enviada (10/s)
+    void oscQuery(const struct OscMessage& m, const std::vector<std::string>& a);
 };
 
 } // namespace ps

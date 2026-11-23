@@ -1,6 +1,8 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Companion (módulo Resolume Arena): o PLAYERSLICE responde às perguntas de estado (\\"?\\") como o Resolume — colunas e clips no ar, nomes, duração e posição — e o módulo fica verde.':'Companion (Resolume Arena module): PLAYERSLICE answers status queries (\\"?\\") like Resolume — live columns and clips, names, duration and position — and the module turns green.',
+'Feedback OSC corrigido: clip no ar = 2 (como o Resolume), coluna ativa, nome, duração e posição dos clips 10 vezes por segundo (contadores de tempo no Companion).':'OSC feedback fixed: live clip = 2 (like Resolume), active column, name, duration and clip position 10 times per second (time counters in Companion).',
 'Importar do Resolume corrigido: a forma das slices vem da grelha de warp do Resolume (paredes em perspetiva ficam iguais) e os nomes das slices são os do Resolume.':'Import from Resolume fixed: slice shapes come from Resolume\'s warp grid (perspective walls match) and slice names are Resolume\'s.',
 'Exportar para o Resolume leva também a grelha de warp das slices com pontos livres.':'Export to Resolume also includes the warp grid of free-point slices.',
 'slice(s) tinham curvas na grelha de warp; foram aproximadas pelos 4 cantos.':'slice(s) had curves in the warp grid; approximated by the 4 corners.',

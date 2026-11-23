@@ -181,10 +181,27 @@ void Osc::sendRaw(const std::vector<uint8_t>& pkt) {
     sendto((SOCKET)m_sendSock, (const char*)pkt.data(), (int)pkt.size(), 0, (sockaddr*)&a, sizeof(a));
 }
 
+void Osc::reply(const std::string& to, const std::string& address, const OscArg& v) {
+    size_t c = to.rfind(':');
+    if (c == std::string::npos) return;
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons((u_short)atoi(to.c_str() + c + 1));
+    if (inet_pton(AF_INET, to.substr(0, c).c_str(), &a.sin_addr) != 1) return;
+    uintptr_t s = m_recvSock != ~(uintptr_t)0 ? m_recvSock : m_sendSock;
+    if (s == ~(uintptr_t)0) { m_sendSock = (uintptr_t)socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); s = m_sendSock; }
+    auto pkt = encode(address, {v});
+    sendto((SOCKET)s, (const char*)pkt.data(), (int)pkt.size(), 0, (sockaddr*)&a, sizeof(a));
+}
+
 void Osc::send(const std::string& address, float v) {
     OscArg a; a.type = 'f'; a.f = v;
     sendRaw(encode(address, {a}));
     if (m_outEnabled) log("→ " + address + " " + std::to_string(v));
+}
+void Osc::sendQuiet(const std::string& address, float v) {
+    OscArg a; a.type = 'f'; a.f = v;
+    sendRaw(encode(address, {a}));
 }
 void Osc::send(const std::string& address, int v) {
     OscArg a; a.type = 'i'; a.i = v;

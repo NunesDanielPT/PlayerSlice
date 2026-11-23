@@ -103,6 +103,7 @@ const RenderTarget* Compositor::previewScreenRT(uint32_t id) const {
 }
 
 void Compositor::triggerColumn(Project& p, int column) {
+    m_lastColumn = column;
     for (int i = 0; i < (int)p.comp.layers.size(); ++i) {
         Layer& l = p.comp.layers[i];
         if (l.ignoreColumn) continue;
@@ -138,6 +139,7 @@ void Compositor::stopLayer(Project& p, int li) {
 }
 
 void Compositor::stopAll(Project& p) {
+    m_lastColumn = -1;
     for (int i = 0; i < (int)p.comp.layers.size(); ++i) stopLayer(p, i);
 }
 

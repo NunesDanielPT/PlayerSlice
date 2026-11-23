@@ -254,6 +254,10 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.8.3", {
+            "Companion (módulo Resolume Arena): o PLAYERSLICE responde às perguntas de estado (\"?\") como o Resolume — colunas e clips no ar, nomes, duração e posição — e o módulo fica verde.",
+            "Feedback OSC corrigido: clip no ar = 2 (como o Resolume), coluna ativa, nome, duração e posição dos clips 10 vezes por segundo (contadores de tempo no Companion).",
+        }},
         {"0.8.2", {
             "Importar do Resolume corrigido: a forma das slices vem da grelha de warp do Resolume (paredes em perspetiva ficam iguais) e os nomes das slices são os do Resolume.",
             "Exportar para o Resolume leva também a grelha de warp das slices com pontos livres.",

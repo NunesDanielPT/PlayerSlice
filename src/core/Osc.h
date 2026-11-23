@@ -35,8 +35,11 @@ public:
 
     std::vector<OscMessage> poll();                     // mensagens recebidas (thread principal)
     void send(const std::string& address, float value);
+    void sendQuiet(const std::string& address, float value);   // sem registo no monitor (envios contínuos)
     void send(const std::string& address, int value);
     void send(const std::string& address, const std::string& value);
+    // resposta a uma pergunta "?" (para o IP:porta de quem perguntou, como o Resolume)
+    void reply(const std::string& to, const std::string& address, const OscArg& value);
 
     bool inputRunning() const { return m_running.load(); }
     std::string lastError() const;
