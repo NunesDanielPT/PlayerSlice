@@ -15,6 +15,8 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 #include <hap.h>
+#include <deque>
+#include <functional>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -414,6 +416,16 @@ bool VideoPlayer::openAndRun() {
     const AVRational atb = as >= 0 ? g.fmt->streams[as]->time_base : AVRational{1, 1};
     std::vector<float> abuf;
     double aNext = 0;
+    double aLast = -1e9;                  // fim do último som entregue (tempo do clip, com loops)
+    // pacotes de vídeo lidos à frente (ficheiros com o som intercalado em blocos grandes)
+    std::deque<AVPacket*> vpend;
+    bool eofPending = false;
+    auto clearPend = [&] {
+        for (auto* pk : vpend) av_packet_free(&pk);
+        vpend.clear();
+        eofPending = false;
+    };
+    struct PendGuard { std::function<void()> f; ~PendGuard() { f(); } } pendGuard{clearPend};
     auto audioPacket = [&](AVPacket* pk) {
         if (!g.adec) return;
         if (avcodec_send_packet(g.adec, pk) < 0) return;
@@ -427,7 +439,10 @@ bool VideoPlayer::openAndRun() {
                 abuf.resize((size_t)maxOut * 2);
                 uint8_t* outp[1] = {(uint8_t*)abuf.data()};
                 int n = swr_convert(g.swr, outp, maxOut, (const uint8_t**)g.afr->extended_data, g.afr->nb_samples);
-                if (n > 0) m_audio->push(rel + loopOffset, abuf.data(), n);
+                if (n > 0) {
+                    m_audio->push(rel + loopOffset, abuf.data(), n);
+                    aLast = rel + loopOffset + (double)n / std::max(1, outRate);
+                }
             }
             av_frame_unref(g.afr);
         }
@@ -467,6 +482,15 @@ bool VideoPlayer::openAndRun() {
         f->gen = gen;
         f->w = fr->width; f->h = fr->height;
         bool full = fr->color_range == AVCOL_RANGE_JPEG;
+        // formatos "J" (MJPEG) estão obsoletos no swscale: usar o equivalente normal com gama completa
+        int srcFmt = fr->format;
+        switch (srcFmt) {
+        case AV_PIX_FMT_YUVJ420P: srcFmt = AV_PIX_FMT_YUV420P; full = true; break;
+        case AV_PIX_FMT_YUVJ422P: srcFmt = AV_PIX_FMT_YUV422P; full = true; break;
+        case AV_PIX_FMT_YUVJ444P: srcFmt = AV_PIX_FMT_YUV444P; full = true; break;
+        case AV_PIX_FMT_YUVJ440P: srcFmt = AV_PIX_FMT_YUV440P; full = true; break;
+        default: break;
+        }
         bool bt709 = fr->colorspace == AVCOL_SPC_BT709 || (fr->colorspace == AVCOL_SPC_UNSPECIFIED && fr->height >= 720);
         if (fr->format == AV_PIX_FMT_D3D11) {
             f->hw = av_frame_clone(fr);
@@ -483,7 +507,7 @@ bool VideoPlayer::openAndRun() {
                 g.sws = sws_alloc_context();
                 av_opt_set_int(g.sws, "srcw", fr->width, 0);
                 av_opt_set_int(g.sws, "srch", fr->height, 0);
-                av_opt_set_int(g.sws, "src_format", fr->format, 0);
+                av_opt_set_int(g.sws, "src_format", srcFmt, 0);
                 av_opt_set_int(g.sws, "dstw", fr->width, 0);
                 av_opt_set_int(g.sws, "dsth", fr->height, 0);
                 av_opt_set_int(g.sws, "dst_format", AV_PIX_FMT_BGRA, 0);
@@ -528,6 +552,7 @@ bool VideoPlayer::openAndRun() {
             m_playhead = 0;
             seekTarget = -1;
             audioReset(true);
+            clearPend(); aLast = -1e9;
         }
         if (m_seekReq.exchange(false)) {
             gen = m_gen.load();
@@ -547,18 +572,43 @@ bool VideoPlayer::openAndRun() {
             seekTarget = t;
             m_playhead = t;
             audioReset(true);
+            clearPend(); aLast = -1e9;
         }
 
-        // fila cheia → esperar (sem ocupar CPU)
-        {
-            std::unique_lock<std::mutex> lk(m_mtx);
-            if (m_queue.size() >= m_maxQueue || m_eof.load()) {
+        // fila cheia → esperar (sem ocupar CPU); mas com som, continuar a ler para o som não ficar
+        // para trás (os pacotes de vídeo ficam guardados, comprimidos, até haver lugar na fila)
+        bool full;
+        { std::lock_guard<std::mutex> lk(m_mtx); full = m_queue.size() >= m_maxQueue || m_eof.load(); }
+        if (full) {
+            bool wantAudio = as >= 0 && !m_eof.load() && !eofPending && !hitOut && vpend.size() < 900 &&
+                             aLast < m_playhead.load() + 1.5;
+            if (!wantAudio) {
+                std::unique_lock<std::mutex> lk(m_mtx);
                 m_cv.wait_for(lk, std::chrono::milliseconds(4));
                 continue;
             }
+            r = av_read_frame(g.fmt, g.pkt);
+            if (r < 0) {
+                if (r == AVERROR_EOF || avio_feof(g.fmt->pb)) eofPending = true;
+                else Sleep(2);
+                continue;
+            }
+            if (g.pkt->stream_index == as) audioPacket(g.pkt);
+            else if (g.pkt->stream_index == vs) vpend.push_back(av_packet_clone(g.pkt));
+            av_packet_unref(g.pkt);
+            continue;
         }
 
-        r = hitOut ? AVERROR_EOF : av_read_frame(g.fmt, g.pkt);
+        if (hitOut) { clearPend(); r = AVERROR_EOF; }
+        else if (!vpend.empty()) {
+            AVPacket* pk = vpend.front();
+            vpend.pop_front();
+            av_packet_unref(g.pkt);
+            av_packet_move_ref(g.pkt, pk);
+            av_packet_free(&pk);
+            r = 0;
+        } else if (eofPending) { eofPending = false; r = AVERROR_EOF; }
+        else r = av_read_frame(g.fmt, g.pkt);
         if (r == AVERROR_EOF || (r < 0 && avio_feof(g.fmt->pb))) {
             hitOut = false;
             if (g.dec) {

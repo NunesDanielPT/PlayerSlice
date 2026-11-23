@@ -1,6 +1,10 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Pico:':'Peak:','(0 dB = máximo, acima disso distorce)':'(0 dB = maximum, above it distorts)',
+'Som sem cortes em ficheiros com o áudio gravado em blocos grandes (ex.: MOV MJPEG): o leitor lê à frente para ter sempre ~1,5 s de som pronto.':'Sound without dropouts in files with audio stored in large blocks (e.g. MJPEG MOV): the reader reads ahead to always have ~1.5 s of sound ready.',
+'VU master (e de layer e clip) com o valor em dB e o pico dos últimos 1,5 s (passa o rato por cima).':'Master VU (and layer and clip) with the dB value and the peak of the last 1.5 s (hover over it).',
+'Vídeos MJPEG: deixa de aparecer o aviso \\"deprecated pixel format\\" no registo.':'MJPEG videos: the \\"deprecated pixel format\\" warning no longer appears in the log.',
 'mudo':'muted',
 'Master de som':'Sound master',
 'Mudo':'Mute',

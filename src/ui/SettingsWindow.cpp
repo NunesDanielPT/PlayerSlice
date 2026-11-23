@@ -106,7 +106,7 @@ void sectionAudio() {
     if (ae.running()) ImGui::TextColored(ImVec4(0.35f, 0.9f, 0.5f, 1), "● %s · %d Hz", ae.deviceName().c_str(), ae.sampleRate());
     else ImGui::TextColored(ImVec4(1, 0.5f, 0.35f, 1), "● %s %s", T("Indisponível:"), ae.error().c_str());
     VuLevel mv = ae.masterVu();
-    vuItem(mv.l, mv.r, 300, 12);
+    vuItemDb("master_settings", mv.l, mv.r, 300, 12);
     ImGui::TextDisabled("%s", T("Nota: clips com velocidade diferente de 1x tocam sem som."));
 }
 
@@ -292,6 +292,11 @@ void sectionWhatsNew() {
             "Test pattern animado (barra, ponteiro e contador de frames) para ver se a saída está fluida.",
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
+        }},
+        {"0.9.1", {
+            "Som sem cortes em ficheiros com o áudio gravado em blocos grandes (ex.: MOV MJPEG): o leitor lê à frente para ter sempre ~1,5 s de som pronto.",
+            "VU master (e de layer e clip) com o valor em dB e o pico dos últimos 1,5 s (passa o rato por cima).",
+            "Vídeos MJPEG: deixa de aparecer o aviso \"deprecated pixel format\" no registo.",
         }},
         {"0.9.0", {
             "SOM: os clips tocam o áudio do ficheiro na placa de som escolhida (Definições → Áudio), sincronizado com o vídeo (também com timecode, Trim e loops).",

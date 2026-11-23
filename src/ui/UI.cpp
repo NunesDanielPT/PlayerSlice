@@ -553,11 +553,8 @@ static void statusBar(App& app) {
         VuLevel mv = AudioEngine::get().masterVu();
         float y = ImGui::GetCursorPosY();
         ImGui::SetCursorPosY(y + (ImGui::GetFrameHeight() - 10) * 0.5f);
-        vuItem(mv.l, mv.r, 90, 10);
-        ImGui::SameLine();
-        ImGui::SetCursorPosY(y);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("%s", app.project.comp.audioMute ? T("som mudo") : T("som"));
+        vuItemDb("master_status", mv.l, mv.r, 110, 10);
+        if (app.project.comp.audioMute) { ImGui::SameLine(); ImGui::SetCursorPosY(y); ImGui::AlignTextToFramePadding(); ImGui::TextColored(ImVec4(1, 0.4f, 0.35f, 1), "%s", T("som mudo")); }
     }
     ImGui::SameLine(); ImGui::TextDisabled(T("|  clips a tocar: %d"), playing);
     ImGui::SameLine(); ImGui::TextDisabled(T("|  frames descartados: %d"), dropped);

@@ -134,7 +134,7 @@ static void compositionPanel(App& app) {
         param(app, T("Master"), &c.master, 0, 1, 1, "%.2f");
     if (ImGui::CollapsingHeader(T("Áudio##comp"), ImGuiTreeNodeFlags_DefaultOpen)) {
         VuLevel mv = AudioEngine::get().masterVu();
-        vuItem(mv.l, mv.r, -1, 12);
+        vuItemDb("master_comp", mv.l, mv.r, -1, 12);
         volumeSlider(app, T("Master de som"), &c.audioVolume);
         if (ImGui::Checkbox(T("Mudo##master"), &c.audioMute)) { app.checkpoint(); app.markDirty(); }
         ImGui::SameLine();
@@ -175,7 +175,7 @@ static void layerPanel(App& app) {
     }
     if (ImGui::CollapsingHeader(T("Áudio##layer"), ImGuiTreeNodeFlags_DefaultOpen)) {
         VuLevel lv = AudioEngine::get().layerVu(l.id);
-        vuItem(lv.l, lv.r, -1, 12);
+        vuItemDb("layer_panel", lv.l, lv.r, -1, 12);
         volumeSlider(app, T("Volume##layer"), &l.volume);
         if (ImGui::Checkbox(T("Mudo##layer"), &l.audioMute)) { app.checkpoint(); app.markDirty(); }
     }
@@ -389,7 +389,7 @@ static void clipPanel(App& app) {
         else ImGui::TextDisabled("%s", T("Este ficheiro não tem som."));
         VuLevel cv{};
         if (VideoPlayer* v = app.comp.activePlayer(l.id); v && l.activeColumn == ci) cv = v->audio()->vu();
-        vuItem(cv.l, cv.r, -1, 12);
+        vuItemDb("clip_panel", cv.l, cv.r, -1, 12);
         volumeSlider(app, T("Volume##clip"), &c.volume);
         param(app, T("Pan"), &c.pan, -1, 1, 0, "%.2f");
         if (ImGui::Checkbox(T("Mudo##clip"), &c.mute)) { app.checkpoint(); app.markDirty(); }

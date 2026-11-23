@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cmath>
 #include <string>
+#include <map>
 #include <algorithm>
 #include <imgui_internal.h>
 #include "core/I18n.h"
@@ -98,6 +99,31 @@ void vuItem(float l, float r, float width, float height) {
     if (ImGui::IsItemHovered()) {
         float pk = std::max(l, r);
         ImGui::SetTooltip("%s", pk > 1e-5f ? (std::to_string((int)std::lround(20.f * std::log10(pk))) + " dB").c_str() : "-inf dB");
+    }
+}
+
+void vuItemDb(const char* id, float l, float r, float width, float height) {
+    struct Hold { float v = 0; double t = 0; };
+    static std::map<std::string, Hold> holds;
+    Hold& h = holds[id];
+    float pk = std::max(l, r);
+    double now = ImGui::GetTime();
+    if (pk >= h.v || now - h.t > 1.5) { h.v = pk; h.t = now; }
+    const float textW = ImGui::CalcTextSize("-00.0 dB").x;
+    if (width <= 0) width = std::max(40.f, ImGui::GetContentRegionAvail().x - textW - 8);
+    vuItem(l, r, width, height);
+    ImGui::SameLine(0, 6);
+    float db = pk > 1e-5f ? 20.f * std::log10(pk) : -100.f;
+    float hdb = h.v > 1e-5f ? 20.f * std::log10(h.v) : -100.f;
+    ImVec4 col = hdb > -0.5f ? ImVec4(1, 0.35f, 0.3f, 1) : hdb > -6.f ? ImVec4(1, 0.8f, 0.3f, 1) : ImVec4(0.7f, 0.72f, 0.76f, 1);
+    char b[32];
+    if (db <= -60.f) snprintf(b, sizeof(b), "-inf dB"); else snprintf(b, sizeof(b), "%.1f dB", db);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (height - ImGui::GetTextLineHeight()) * 0.5f);
+    ImGui::TextColored(col, "%s", b);
+    if (ImGui::IsItemHovered()) {
+        char hb[48];
+        if (hdb <= -60.f) snprintf(hb, sizeof(hb), "-inf dB"); else snprintf(hb, sizeof(hb), "%.1f dB", hdb);
+        ImGui::SetTooltip("%s %s  %s", T("Pico:"), hb, T("(0 dB = máximo, acima disso distorce)"));
     }
 }
 

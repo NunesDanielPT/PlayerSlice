@@ -49,6 +49,8 @@ bool  valueSlider(App& app, const char* label, float* v, float lo, float hi, flo
 // VU (L/R) de -60 a +6 dB; desenha num retângulo (sem ocupar espaço) ou como item (vuItem)
 void  vuDraw(ImDrawList* dl, ImVec2 p0, ImVec2 size, float l, float r, bool vertical);
 void  vuItem(float l, float r, float width, float height = 10.f);
+// VU + valor em dB à direita (com o pico mais alto dos últimos 1,5 s)
+void  vuItemDb(const char* id, float l, float r, float width, float height = 10.f);
 // volume em dB (−60 = mudo … +12) sobre um ganho linear
 bool  volumeSlider(App& app, const char* label, float* gain);
 
