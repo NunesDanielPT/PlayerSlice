@@ -1,6 +1,14 @@
 # Dicionário PT -> EN do PLAYERSLICE. Gera src/core/I18nStrings.inc
 # Correr:  python scripts/i18n_en.py   (falha se alguma frase da interface não tiver tradução)
 EN = {
+'Importar do Resolume / MapSim (.xml): ecrãs e slices com Input Selection e Output (incluindo rodados e com pontos livres).':'Import from Resolume / MapSim (.xml): screens and slices with Input Selection and Output (including rotated and free points).',
+'Presets de saída: apagar pelo x ao lado de cada preset (ou botão direito), sempre com confirmação.':'Output presets: delete with the x next to each preset (or right-click), always with confirmation.',
+'A lista já não mostra os presets do Resolume; importar/exportar abre em Documentos.':'The list no longer shows Resolume presets; import/export opens in Documents.',
+'Cria um .xml para abrir no Advanced Output do Resolume.':'Creates an .xml to open in Resolume Advanced Output.',
+'Apagar este preset':'Delete this preset',
+'Apagar o preset \\"%s\\"?':'Delete preset \\"%s\\"?',
+'O ficheiro é apagado e não dá para desfazer. Os ecrãs abertos agora não mudam.':'The file is deleted and cannot be undone. The screens open now do not change.',
+'Sim, apagar':'Yes, delete','Não foi possível apagar o preset':'Could not delete the preset','Preset apagado':'Preset deleted',
 '19. Presets de saída':'19. Output presets',
 'Na Saída avançada, o botão do topo grava e carrega presets de ecrãs e slices. Importar do Resolume / MapSim lê o .xml do Advanced Output; Exportar para o Resolume cria um .xml que o Resolume abre.':'In Advanced Output, the top button saves and loads presets of screens and slices. Import from Resolume / MapSim reads the Advanced Output .xml; Export to Resolume creates an .xml that Resolume opens.',
 '20. NDI e saída virtual':'20. NDI and virtual output',

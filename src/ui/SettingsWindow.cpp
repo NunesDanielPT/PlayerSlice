@@ -254,10 +254,14 @@ void sectionWhatsNew() {
             "Input Selection mostra no fundo a layer escolhida como fonte da slice.",
             "Arrastar layers pelo nome, com animação: fantasma, origem esbatida e linha onde vai cair (também em colunas e clips).",
         }},
+        {"0.8.1", {
+            "Presets de saída: apagar pelo x ao lado de cada preset (ou botão direito), sempre com confirmação.",
+            "A lista já não mostra os presets do Resolume; importar/exportar abre em Documentos.",
+        }},
         {"0.8.0", {
             "Saída avançada: novos dispositivos NDI (envia o ecrã pela rede para Resolume, vMix, OBS, Pixera...; precisa do NDI Tools) e Saída virtual (ecrã que só existe no PLAYERSLICE).",
             "Presets de saída como no Resolume: Gravar, Gravar como, Mudar o nome, Apagar, Novo, Mostrar no Explorador, Carregar e lista de presets (Documentos → PLAYERSLICE → Saídas).",
-            "Importar do Resolume / MapSim (.xml): ecrãs e slices com Input Selection e Output (incluindo rodados e com pontos livres). A lista mostra também os presets do Resolume instalados.",
+            "Importar do Resolume / MapSim (.xml): ecrãs e slices com Input Selection e Output (incluindo rodados e com pontos livres).",
             "Exportar para o Resolume (.xml): os ecrãs e slices aparecem no Advanced Output do Resolume.",
             "Novidades com a versão instalada no topo e destacada; Como usar com mais passos.",
         }},

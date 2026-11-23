@@ -1060,7 +1060,6 @@ std::filesystem::path presetDir() {
     std::error_code ec; std::filesystem::create_directories(d, ec);
     return d;
 }
-std::filesystem::path resolumePresetDir() { return documentsDir() / L"Resolume Arena" / L"Presets" / L"Advanced Output"; }
 bool readText(const std::filesystem::path& f, std::string& out) {
     std::ifstream in(f, std::ios::binary);
     if (!in) return false;
@@ -1099,6 +1098,7 @@ struct PresetUi {
     int nameMode = 0;            // 1 gravar como, 2 mudar o nome
     char name[128] = "";
     bool askComp = false;        // perguntar se muda o tamanho da composição
+    std::string del;             // preset a apagar (à espera de confirmação)
     int compW = 0, compH = 0;
     std::string msg;
 } g_pr;
@@ -1153,18 +1153,14 @@ static void presetBar(App& app) {
     std::string lbl = cur + "  ▾###presetbtn";
     if (ImGui::Button(lbl.c_str(), ImVec2(-1, 0))) ImGui::OpenPopup("##presetmenu");
     hint(T("Presets de saída: grava e carrega configurações de ecrãs e slices, e importa/exporta do Resolume."));
-    bool openName = false;
+    bool openName = false, openDel = false;
     if (ImGui::BeginPopup("##presetmenu")) {
         if (ImGui::MenuItem(T("Gravar"), nullptr, false, true)) {
             if (app.ui.outPreset.empty()) { g_pr.nameMode = 1; openName = true; } else savePreset(app, app.ui.outPreset);
         }
         if (ImGui::MenuItem(T("Gravar como..."))) { g_pr.nameMode = 1; openName = true; }
         if (ImGui::MenuItem(T("Mudar o nome..."), nullptr, false, !app.ui.outPreset.empty())) { g_pr.nameMode = 2; openName = true; }
-        if (ImGui::MenuItem(T("Apagar"), nullptr, false, !app.ui.outPreset.empty())) {
-            std::error_code ec;
-            std::filesystem::remove(presetDir() / (fromUtf8(app.ui.outPreset) + L".psout"), ec);
-            app.ui.outPreset.clear();
-        }
+        if (ImGui::MenuItem(T("Apagar"), nullptr, false, !app.ui.outPreset.empty())) { g_pr.del = app.ui.outPreset; openDel = true; }
         if (ImGui::MenuItem(T("Novo"))) {
             app.checkpoint();
             p.screens.clear();
@@ -1181,39 +1177,35 @@ static void presetBar(App& app) {
         }
         ImGui::Separator();
         if (ImGui::MenuItem(T("Importar do Resolume / MapSim (.xml)..."))) {
-            auto rd = resolumePresetDir();
-            std::error_code ec;
-            std::string f = fileDialog(app.hwnd(), false, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", std::filesystem::exists(rd, ec) ? rd.wstring() : documentsDir().wstring());
+            std::string f = fileDialog(app.hwnd(), false, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", documentsDir().wstring());
             if (!f.empty()) importResolume(app, std::filesystem::path(fromUtf8(f)));
         }
         if (ImGui::MenuItem(T("Exportar para o Resolume (.xml)..."))) {
-            auto rd = resolumePresetDir();
-            std::error_code ec;
             std::wstring nm = fromUtf8(app.ui.outPreset.empty() ? std::string("PLAYERSLICE") : app.ui.outPreset);
-            std::string f = fileDialog(app.hwnd(), true, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", std::filesystem::exists(rd, ec) ? rd.wstring() : documentsDir().wstring(), nm + L".xml");
+            std::string f = fileDialog(app.hwnd(), true, L"Resolume Advanced Output (*.xml)", L"*.xml", L"xml", documentsDir().wstring(), nm + L".xml");
             if (!f.empty()) {
                 if (writeText(std::filesystem::path(fromUtf8(f)), exportResolumeXml(p, app.ui.outPreset.empty() ? "PLAYERSLICE" : app.ui.outPreset)))
                     PS_INFO("%s: %s", T("Exportado para o Resolume"), f.c_str());
                 else PS_ERROR("%s", T("Não foi possível gravar o ficheiro"));
             }
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Grava na pasta de presets do Resolume (Documentos → Resolume Arena → Presets → Advanced Output) para aparecer na lista do Resolume."));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Cria um .xml para abrir no Advanced Output do Resolume."));
         auto mine = listFiles(presetDir(), L".psout");
         ImGui::SeparatorText(T("Presets"));
         if (mine.empty()) ImGui::TextDisabled("%s", T("(nenhum)"));
         for (auto& f : mine) {
             std::string nm = toUtf8(f.stem().wstring());
             bool cur2 = nm == app.ui.outPreset;
-            if (ImGui::MenuItem((std::string(cur2 ? "● " : "   ") + nm + "##p").c_str())) loadPresetFile(app, f);
-        }
-        std::error_code ec;
-        auto rd = resolumePresetDir();
-        if (std::filesystem::exists(rd, ec)) {
-            auto res = listFiles(rd, L".xml");
-            if (!res.empty()) {
-                ImGui::SeparatorText(T("Presets do Resolume"));
-                for (auto& f : res) if (ImGui::MenuItem((toUtf8(f.stem().wstring()) + "##r").c_str())) importResolume(app, f);
-            }
+            ImGui::PushID(nm.c_str());
+            float xw = ImGui::GetFrameHeight();
+            if (ImGui::Selectable((std::string(cur2 ? "● " : "   ") + nm).c_str(), false, ImGuiSelectableFlags_None, ImVec2(std::max(160.f, ImGui::GetContentRegionAvail().x - xw - 6), 0))) loadPresetFile(app, f);
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) { g_pr.del = nm; openDel = true; ImGui::CloseCurrentPopup(); }
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.16f, 0.16f, 1));
+            if (ImGui::SmallButton("x")) { g_pr.del = nm; openDel = true; ImGui::CloseCurrentPopup(); }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Apagar este preset"));
+            ImGui::PopID();
         }
         ImGui::EndPopup();
     }
@@ -1239,6 +1231,26 @@ static void presetBar(App& app) {
             } else savePreset(app, nm);
             ImGui::CloseCurrentPopup();
         }
+        ImGui::EndPopup();
+    }
+    // confirmar apagar preset
+    if (openDel) ImGui::OpenPopup("##delpreset");
+    if (ImGui::BeginPopupModal("##delpreset", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text(T("Apagar o preset \"%s\"?"), g_pr.del.c_str());
+        ImGui::TextDisabled("%s", T("O ficheiro é apagado e não dá para desfazer. Os ecrãs abertos agora não mudam."));
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.18f, 0.18f, 1));
+        if (ImGui::Button(T("Sim, apagar"))) {
+            std::error_code ec;
+            std::filesystem::remove(presetDir() / (fromUtf8(g_pr.del) + L".psout"), ec);
+            if (ec) PS_ERROR("%s", T("Não foi possível apagar o preset"));
+            else { PS_INFO("%s: %s", T("Preset apagado"), g_pr.del.c_str()); if (app.ui.outPreset == g_pr.del) app.ui.outPreset.clear(); }
+            g_pr.del.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        if (ImGui::Button(T("Cancelar##del")) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { g_pr.del.clear(); ImGui::CloseCurrentPopup(); }
         ImGui::EndPopup();
     }
     // pergunta: tamanho da composição do preset importado
