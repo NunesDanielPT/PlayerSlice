@@ -366,8 +366,13 @@ static void layerHeader(App& app, int li, float rowH) {
     if (ImGui::Button("S", ImVec2(bs, bs))) { app.checkpoint(); l.solo = !l.solo; }
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Solo"));
+    ImGui::SameLine(0, 3);
+    ImGui::PushStyleColor(ImGuiCol_Button, l.audioMute ? ImVec4(0.8f, 0.25f, 0.25f, 1) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+    if (ImGui::Button("M", ImVec2(bs, bs))) { app.checkpoint(); l.audioMute = !l.audioMute; app.markDirty(); }
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Mudo (som desta layer)"));
     ImGui::SameLine(0, 6);
-    ImGui::SetNextItemWidth(std::max(40.f, w - (bs + 3) * 3 - 18));
+    ImGui::SetNextItemWidth(std::max(40.f, w - (bs + 3) * 4 - 18));
     valueSlider(app, "##op", &l.opacity, 0, 1, 1, "%.2f");
 
     ImGui::SetCursorScreenPos(ImVec2(p0.x + 8, p0.y + 54));
@@ -379,7 +384,6 @@ static void layerHeader(App& app, int li, float rowH) {
     {
         VuLevel lv = AudioEngine::get().layerVu(l.id);
         vuDraw(ImGui::GetWindowDrawList(), ImVec2(p0.x + 8, p0.y + rowH - 12), ImVec2(w - 16, 6), lv.l, lv.r, false);
-        if (l.audioMute) ImGui::GetWindowDrawList()->AddText(ImVec2(p0.x + w - 46, p0.y + 54), IM_COL32(235, 90, 80, 255), T("mudo"));
     }
     // área inteira: menu de contexto + largar clips, ficheiros e efeitos
     ImGui::SetCursorScreenPos(p0);
